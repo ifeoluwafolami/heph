@@ -1,0 +1,28 @@
+@import "tailwindcss";
+@import "./assets/fonts/fonts.css";
+
+@theme {
+  --font-modern: "Modernline", "cursive";
+  --font-pompiere: "Pompiere", "serif";
+  --font-urban: "Urbanist", "serif";
+  --color-claret: #670626;
+  --color-pink: #FFBDC5;
+}
+
+/* Autofill styling for inputs */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #FFBDC5 inset !important;
+  -webkit-text-fill-color: #670626 !important;
+}
+
+/* Hide scrollbar but keep scrolling */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}

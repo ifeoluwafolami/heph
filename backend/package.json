@@ -1,0 +1,41 @@
+{
+  "name": "heph-backend",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "tailwind:build": "tailwindcss -i src/public/styles.css -o dist/public/styles.css --minify",
+    "tailwind:watch": "tailwindcss -i src/public/styles.css -o dist/public/styles.css --watch"
+    ,"seed": "node scripts/seed-user.js"
+    ,"check-login": "node scripts/check-login.js"
+    ,"clear-filler": "node scripts/clear-filler-data.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "helmet": "^7.0.0",
+    "jsonwebtoken": "^9.0.0",
+    "mongoose": "^7.5.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20.5.1",
+    "autoprefixer": "^10.4.14",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.7",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.6.2"
+  }
+}
