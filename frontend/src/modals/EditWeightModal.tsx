@@ -31,9 +31,10 @@ export default function EditWeightModal({ open, onClose, weight }: EditWeightMod
   }
 
   async function handleUpdate() {
-    if (!weight._id) return
+    const id = weight?._id
+    if (!id) return
     try {
-      await updateWeight(weight._id, { weightKg: Number(weightKg || 0), entryDate, note: note || undefined })
+      await updateWeight(id, { weightKg: Number(weightKg || 0), entryDate, note: note || undefined })
       toast.push({ type: 'success', message: 'Weight updated' })
       window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'weight' } }))
       onClose()

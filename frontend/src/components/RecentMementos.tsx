@@ -29,6 +29,7 @@ const defaultMementos: MementoItem[] = [
 ];
 
 export default function RecentMementos({ mementos = defaultMementos }: RecentMementosProps) {
+  const navigate = useNavigate()
   return (
     <section className="my-6 rounded-2xl bg-pink text-claret p-6 md:p-8 w-full shadow-xl border border-claret/20">
       <div className="mb-4 flex items-center justify-between">

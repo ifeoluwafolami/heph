@@ -74,10 +74,11 @@ export default function EditRecentExpenseModal({ open, onClose, expense }: EditR
   }
 
   async function handleSave() {
-    if (!expense._id) return;
+    const id = expense?._id
+    if (!id) return;
     const amt = Number(amount || 0);
     try {
-      await updateExpense(expense._id, { title, amount: amt, expenseDate: dateValue });
+      await updateExpense(id, { title, amount: amt, expenseDate: dateValue });
       toast.push({ type: 'success', message: 'Expense updated' })
       window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'expense' } }))
       onClose()

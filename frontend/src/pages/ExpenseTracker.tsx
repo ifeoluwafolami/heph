@@ -6,28 +6,7 @@ import NewExpenseModal from "@/modals/NewExpenseModal";
 import { useState, useEffect } from "react";
 import { getExpenseSummary, getBudgets, getExpenses } from "@/lib/api";
 
-const expenseItems = [
-  { title: "Groceries", date: "Mar 22, 2026", amount: "45.50" },
-  { title: "Dining Out", date: "Mar 21,2026", amount: "32.75" },
-  { title: "Transportation", date: "Mar 20, 2026", amount: "15.00" },
-  { title: "Utilities", date: "Mar 19, 2026", amount: "85.00" },
-  { title: "Entertainment", date: "Mar 18, 2026", amount: "25.00" },
-];
-
-const budgetCategories = [
-    { name: "Groceries", spent: 320, budget: 500 },
-    { name: "Utilities", spent: 185, budget: 200 },
-    { name: "Entertainment", spent: 95, budget: 150 },
-    { name: "Transportation", spent: 280, budget: 300 },
-    { name: "Dining Out", spent: 220, budget: 200 },
-    { name: "Health & Fitness", spent: 45, budget: 150 },
-];
-
-const summaryCards = [
-  { label: "Total Spent This Month", value: "2,340" },
-  { label: "Remaining", value: "2,320" },
-    { label: "Total Budget", value: "4,660" },
-];
+// Example data removed — real data is loaded from API and kept in component state
 
 export default function ExpenseTracker() {
     const [isNewExpenseOpen, setIsNewExpenseOpen] = useState(false);

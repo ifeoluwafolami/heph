@@ -25,9 +25,10 @@ export default function EditRecipeModal({ open, onClose, recipe }: EditRecipeMod
   if (!open || !recipe) return null
 
   async function handleUpdate() {
-    if (!recipe._id) return
+    const id = recipe?._id
+    if (!id) return
     try {
-      await updateRecipe(recipe._id, { title, servings: Number(servings) || 0, caloriesPerServing: Number(calories) || 0, notes: notes || undefined })
+      await updateRecipe(id, { title, servings: Number(servings) || 0, caloriesPerServing: Number(calories) || 0, notes: notes || undefined })
       toast.push({ type: 'success', message: 'Recipe updated' })
       window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'recipe' } }))
       onClose()

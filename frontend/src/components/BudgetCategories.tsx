@@ -7,6 +7,8 @@ import LogExpenseModal from "@/modals/LogExpenseModal";
 import NewBudgetModal from "@/modals/NewBudgetModal";
 
 type BudgetCategory = {
+  spentAmount: number;
+  monthlyBudget: number;
   _id?: string;
   name: string;
   spent: number;
@@ -18,12 +20,12 @@ type BudgetCategoriesProps = {
 };
 
 const defaultCategories: BudgetCategory[] = [
-  { name: "Groceries", spent: 320, budget: 500 },
-  { name: "Utilities", spent: 185, budget: 200 },
-  { name: "Entertainment", spent: 95, budget: 150 },
-  { name: "Transportation", spent: 280, budget: 300 },
-  { name: "Dining Out", spent: 220, budget: 200 },
-  { name: "Health & Fitness", spent: 45, budget: 150 },
+  { name: "Groceries", spent: 320, budget: 500, spentAmount: 320, monthlyBudget: 500 },
+  { name: "Utilities", spent: 185, budget: 200, spentAmount: 185, monthlyBudget: 200 },
+  { name: "Entertainment", spent: 95, budget: 150, spentAmount: 95, monthlyBudget: 150 },
+  { name: "Transportation", spent: 280, budget: 300, spentAmount: 280, monthlyBudget: 300 },
+  { name: "Dining Out", spent: 220, budget: 200, spentAmount: 220, monthlyBudget: 200 },
+  { name: "Health & Fitness", spent: 45, budget: 150, spentAmount: 45, monthlyBudget: 150 },
 ];
 
 export default function BudgetCategories({ categories = defaultCategories }: BudgetCategoriesProps) {
@@ -74,7 +76,14 @@ export default function BudgetCategories({ categories = defaultCategories }: Bud
                 <div className="flex gap-4 mt-2">
                   <button
                     type="button"
-                    onClick={() => setSelectedEditCategory({ _id: (category as any)._id, name, spent, budget })}
+                    onClick={() => setSelectedEditCategory({
+                      _id: (category as any)._id,
+                      name,
+                      spent,
+                      budget,
+                      spentAmount: Number((category as any).spentAmount ?? spent ?? 0),
+                      monthlyBudget: Number((category as any).monthlyBudget ?? budget ?? 0),
+                    })}
                     className="text-xs md:text-sm uppercase tracking-wider hover:text-pink/90 hover:scale-110 transition-transform duration-300 ease-in-out drop-shadow-[0_2px_6px_rgba(255,189,197,0.45)]"
                     aria-label={`Edit ${category.name} budget`}
                     title={`Edit ${category.name}`}

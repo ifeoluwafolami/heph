@@ -31,9 +31,10 @@ export default function EditBudgetModal({ open, onClose, category }: EditBudgetM
   if (!open || !category) return null;
 
   async function handleUpdate() {
-    if (!category._id) return
+    const id = category?._id
+    if (!id) return
     try {
-      await updateBudget(category._id, { monthlyBudget: Number(limit) as any })
+      await updateBudget(id, { monthlyBudget: Number(limit) as any })
       toast.push({ type: 'success', message: 'Budget updated' })
       window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'budget' } }))
       onClose()

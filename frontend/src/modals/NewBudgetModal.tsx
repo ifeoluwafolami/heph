@@ -20,7 +20,7 @@ export default function NewBudgetModal({ open, onClose }: NewBudgetModalProps) {
     const monthlyBudget = Number(limit)
     if (!name || !monthlyBudget) return
     try {
-      const res = await createBudget({ name, monthlyBudget })
+      await createBudget({ name, monthlyBudget })
       toast.push({ type: 'success', message: 'Category created' })
       window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'budget' } }))
       onClose()

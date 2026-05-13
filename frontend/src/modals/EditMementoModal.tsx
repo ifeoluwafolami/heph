@@ -15,9 +15,10 @@ export default function EditMementoModal({ open, onClose, memento }: EditMemento
   if (!open || !memento) return null
 
   async function handleUpdate() {
-    if (!memento._id) return
+    const id = memento?._id
+    if (!id) return
     try {
-      await updateMemento(memento._id, { title, content })
+      await updateMemento(id, { title, content })
       toast.push({ type: 'success', message: 'Memento updated' })
       window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'memento' } }))
       onClose()

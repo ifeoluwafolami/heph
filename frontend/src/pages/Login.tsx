@@ -1,4 +1,4 @@
-import Layout from "@/components/Layout";
+// Layout import removed — not used in this page
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { login as apiLogin, setAuthTokens, setStoredUser } from "@/lib/api";

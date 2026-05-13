@@ -342,18 +342,18 @@ export default function Ounje() {
 
         {selectedWeightEntry ? (
           <ModalFrame onClose={() => setSelectedWeightEntry(null)}>
-            <ModalHead>Weight Entry — {selectedWeightEntry.date}</ModalHead>
+            <ModalHead>Weight Entry — {new Date(selectedWeightEntry.entryDate).toLocaleDateString()}</ModalHead>
             <ModalBody>
               <div className="flex justify-center h-full gap-2">
                 <div className="rounded-xl border border-claret/20 bg-claret/95 p-4 text-pink w-1/2">
                   <p className="text-sm md:text-base uppercase tracking-widest opacity-80">Weight</p>
-                  <p className="text-2xl md:text-3xl font-bold">{selectedWeightEntry.weight}</p>
+                  <p className="text-2xl md:text-3xl font-bold">{selectedWeightEntry.weightKg}</p>
                 </div>
 
-                {selectedWeightEntry.change ? (
+                {selectedWeightEntry.changeKg ? (
                   <div className="rounded-xl border border-claret/20 bg-claret/95 p-4 text-pink w-1/2">
                     <p className="text-sm md:text-base uppercase tracking-widest opacity-80">Change</p>
-                    <p className="text-2xl md:text-3xl font-bold">{selectedWeightEntry.change}</p>
+                    <p className="text-2xl md:text-3xl font-bold">{selectedWeightEntry.changeKg}</p>
                   </div>
                 ) : null}
               </div>
@@ -369,8 +369,8 @@ export default function Ounje() {
               <div className="flex w-full justify-center gap-4 px-4">
                 <button
                   type="button"
-                  aria-label={`Edit weight entry for ${selectedWeightEntry.date}`}
-                  title={`Edit weight entry for ${selectedWeightEntry.date}`}
+                  aria-label={`Edit weight entry for ${selectedWeightEntry.entryDate}`}
+                  title={`Edit weight entry for ${selectedWeightEntry.entryDate}`}
                   className="inline-flex items-center gap-1.5 justify-center rounded-2xl border border-claret bg-claret px-12 py-3 text-sm md:text-base uppercase tracking-widest text-pink hover:bg-claret/90 transition-all focus:outline-none focus:ring-2 focus:ring-claret focus:ring-offset-2 focus:ring-offset-pink"
                 >
                   <Pencil className="size-4" />
@@ -378,8 +378,8 @@ export default function Ounje() {
                 </button>
                 <button
                   type="button"
-                  aria-label={`Delete weight entry for ${selectedWeightEntry.date}`}
-                  title={`Delete weight entry for ${selectedWeightEntry.date}`}
+                  aria-label={`Delete weight entry for ${selectedWeightEntry.entryDate}`}
+                  title={`Delete weight entry for ${selectedWeightEntry.entryDate}`}
                   className="inline-flex items-center gap-1.5 justify-center rounded-2xl border border-claret bg-pink px-12 py-3 text-sm md:text-base uppercase tracking-widest text-claret hover:bg-claret/80 hover:text-pink transition-all focus:outline-none focus:ring-2 focus:ring-claret focus:ring-offset-2 focus:ring-offset-pink"
                 >
                   <Trash2 className="size-4" />
