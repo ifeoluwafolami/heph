@@ -33,7 +33,12 @@ export default function NewMementoModal({ open, onClose }: NewMementoModalProps)
         </label>
         <label className="block space-y-1 mt-3">
           <span className="text-sm uppercase tracking-widest">Content</span>
-          <textarea value={content} onChange={(e) => setContent(e.target.value)} className="w-full rounded-xl border border-claret/30 bg-pink px-3 py-2" />
+          <textarea
+            rows={6}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="w-full h-40 rounded-xl border border-claret/30 bg-pink px-3 py-2"
+          />
         </label>
       </ModalBody>
       <ModalFooter>
