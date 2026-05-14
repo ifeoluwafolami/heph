@@ -1,6 +1,6 @@
 import { ModalBody, ModalFooter, ModalFrame, ModalHead } from "@/components/Modal";
 import { Pencil } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { updateMemento } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
@@ -8,9 +8,15 @@ type Memento = { _id?: string; title: string; content: string }
 type EditMementoModalProps = { open: boolean; onClose: () => void; memento: Memento | null }
 
 export default function EditMementoModal({ open, onClose, memento }: EditMementoModalProps) {
-  const [title, setTitle] = useState(memento?.title ?? "")
-  const [content, setContent] = useState(memento?.content ?? "")
+  const [title, setTitle] = useState("")
+  const [content, setContent] = useState("")
   const toast = useToast()
+
+  useEffect(() => {
+    if (!memento) return
+    setTitle(memento.title ?? "")
+    setContent(memento.content ?? "")
+  }, [memento])
 
   if (!open || !memento) return null
 

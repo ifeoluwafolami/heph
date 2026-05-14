@@ -98,7 +98,7 @@ export default function Mementos() {
           {mementos.map((memento) => (
             <article
               key={memento._id}
-              className="w-full lg:w-[calc((100%-2rem)/3)] cursor-pointer rounded-2xl border border-claret/30 bg-pink text-claret p-6 md:p-8 shadow-xl transition-all hover:shadow-2xl focus-within:ring-2 focus-within:ring-claret focus-within:ring-offset-2 focus-within:ring-offset-pink"
+              className="w-full lg:w-[calc((100%-2rem)/4)] cursor-pointer rounded-2xl border border-claret/30 bg-pink text-claret p-6 md:p-8 shadow-xl transition-all hover:shadow-2xl focus-within:ring-2 focus-within:ring-claret focus-within:ring-offset-2 focus-within:ring-offset-pink flex flex-col"
               onClick={() => setSelectedMemento(memento)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -113,13 +113,13 @@ export default function Mementos() {
               <div className="flex items-start justify-between gap-3">
                 <h2 className="text-2xl md:text-3xl font-bold">{memento.title}</h2>
 
-                <div className="flex gap-4 shrink-0">
+                <div className="flex gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setSelectedMementoForEdit(memento) }}
                     aria-label={`Edit ${memento.title}`}
                     title={`Edit ${memento.title}`}
-                    className="text-xs md:text-sm uppercase tracking-wider hover:bg-pink hover:text-claret hover:scale-110 transition-transform duration-300 ease-in-out drop-shadow-[0_2px_6px_rgba(103,6,38,0.45)]"
+                    className="text-xs md:text-sm uppercase tracking-wider p-2 hover:bg-pink hover:rounded-full hover:text-claret hover:scale-110 transition-transform duration-300 ease-in-out drop-shadow-[0_2px_6px_rgba(103,6,38,0.45)]"
                   >
                     <Pencil className="size-4 md:size-5" />
                   </button>
@@ -128,17 +128,17 @@ export default function Mementos() {
                     onClick={(e) => { e.stopPropagation(); setSelectedMementoForDelete(memento) }}
                     aria-label={`Delete ${memento.title}`}
                     title={`Delete ${memento.title}`}
-                    className="text-xs md:text-sm uppercase tracking-wider hover:bg-pink hover:text-claret hover:scale-110 transition-transform duration-300 ease-in-out drop-shadow-[0_2px_6px_rgba(103,6,38,0.45)]"
+                    className="text-xs md:text-sm uppercase tracking-wider p-2 hover:bg-pink hover:rounded-full hover:text-claret hover:scale-110 transition-transform duration-300 ease-in-out drop-shadow-[0_2px_6px_rgba(103,6,38,0.45)]"
                   >
                     <Trash2 className="size-4 md:size-5" />
                   </button>
                 </div>
               </div>
 
-              <p className="mt-4 text-lg md:text-xl tracking-normal whitespace-pre-wrap">{memento.content}</p>
+              <p className="mt-4 text-lg md:text-xl tracking-normal whitespace-pre-wrap line-clamp-4 grow">{memento.content}</p>
 
-              <div className="mt-6 flex flex-col gap-1 text-sm md:text-base uppercase tracking-wider opacity-80">
-                <p>Created: {new Date(memento.createdAt).toLocaleDateString()}</p>
+              <div className="flex flex-col gap-1 text-sm md:text-base uppercase tracking-wider opacity-80 mt-auto">
+                <p className="mt-6">Created: {new Date(memento.createdAt).toLocaleDateString()}</p>
                 {memento.editedAt ? <p>Edited: {new Date(memento.editedAt).toLocaleDateString()}</p> : null}
               </div>
             </article>
