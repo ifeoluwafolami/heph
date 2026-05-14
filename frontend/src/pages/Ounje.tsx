@@ -266,7 +266,7 @@ export default function Ounje() {
 
               <div className="mt-5">
                 <p className="text-xl md:text-2xl uppercase tracking-widest opacity-80">Notes</p>
-                <p className="mt-1 text-lg md:text-xl tracking-normal">{selectedRecipe.notes}</p>
+                <p className="mt-1 text-lg md:text-xl tracking-normal whitespace-pre-wrap">{selectedRecipe.notes}</p>
               </div>
             </ModalBody>
 

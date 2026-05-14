@@ -1,6 +1,6 @@
 import { ModalBody, ModalFooter, ModalFrame, ModalHead } from "@/components/Modal";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createMemento } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
@@ -9,18 +9,31 @@ type NewMementoModalProps = { open: boolean; onClose: () => void }
 export default function NewMementoModal({ open, onClose }: NewMementoModalProps) {
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
+  const [loading, setLoading] = useState(false)
   const toast = useToast()
+
+  useEffect(() => {
+    if (!open) {
+      setTitle("")
+      setContent("")
+      setLoading(false)
+    }
+  }, [open])
 
   if (!open) return null
 
   async function handleCreate() {
     if (!title) return
+    setLoading(true)
     try {
       await createMemento({ title, content })
       toast.push({ type: 'success', message: 'Memento created' })
       window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'memento' } }))
       onClose()
     } catch (err) { console.error(err) }
+    finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -42,7 +55,7 @@ export default function NewMementoModal({ open, onClose }: NewMementoModalProps)
         </label>
       </ModalBody>
       <ModalFooter>
-        <button onClick={handleCreate} className="inline-flex items-center gap-2 rounded-2xl border border-claret bg-claret px-4 py-3 text-sm uppercase tracking-widest text-pink hover:bg-claret/90 justify-center"><Plus className="size-4" /> Create</button>
+        <button onClick={handleCreate} disabled={loading} className="inline-flex items-center gap-2 rounded-2xl border border-claret bg-claret px-4 py-3 text-sm uppercase tracking-widest text-pink hover:bg-claret/90 justify-center disabled:opacity-50 disabled:cursor-not-allowed"><Plus className="size-4" /> Create</button>
       </ModalFooter>
     </ModalFrame>
   )

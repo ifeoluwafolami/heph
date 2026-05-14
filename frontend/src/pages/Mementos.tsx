@@ -135,7 +135,7 @@ export default function Mementos() {
                 </div>
               </div>
 
-              <p className="mt-4 text-lg md:text-xl tracking-normal">{memento.content}</p>
+              <p className="mt-4 text-lg md:text-xl tracking-normal whitespace-pre-wrap">{memento.content}</p>
 
               <div className="mt-6 flex flex-col gap-1 text-sm md:text-base uppercase tracking-wider opacity-80">
                 <p>Created: {new Date(memento.createdAt).toLocaleDateString()}</p>
@@ -150,7 +150,7 @@ export default function Mementos() {
             <ModalHead>{selectedMemento.title}</ModalHead>
             <ModalBody>
               <div>
-                <p className="mt-2 text-xl md:text-2xl tracking-normal">{selectedMemento.content}</p>
+                <p className="mt-2 text-xl md:text-2xl tracking-normal whitespace-pre-wrap">{selectedMemento.content}</p>
               </div>
 
               <div
