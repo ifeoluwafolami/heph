@@ -1,7 +1,15 @@
 import { FireworksBackground } from '@/components/FireworksBackground';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
+import { getAccessToken, getStoredUser } from '@/lib/api';
 
 export default function Homepage() {
+    const token = getAccessToken()
+    const user = getStoredUser()
+
+    if (token && user) {
+        return <Navigate to="/dashboard" replace />
+    }
+
     return (
         <div className="relative w-screen h-screen bg-claret text-pink">
             <FireworksBackground className="absolute inset-0" population={0.5} color="#FFBDC5" />

@@ -1,4 +1,4 @@
-import { Route, BrowserRouter, Routes } from "react-router-dom"
+import { Route, BrowserRouter, Routes, Navigate } from "react-router-dom"
 import Homepage from "./pages/Homepage"
 import Login from "./pages/Login"
 import Dashboard from "./pages/Dashboard"
@@ -18,6 +18,7 @@ function App() {
         <Route path="/owo" element={<RequireAuth><ExpenseTracker /></RequireAuth>} />
         <Route path="/mementos" element={<RequireAuth><Mementos /></RequireAuth>} />
         <Route path="/ounje" element={<RequireAuth><Ounje /></RequireAuth>} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   )
