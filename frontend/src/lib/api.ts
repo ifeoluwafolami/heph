@@ -15,6 +15,12 @@ type ApiError = {
 
 type ApiResponse<T> = ApiSuccess<T> | ApiError
 
+const ACCESS_TOKEN_KEY = 'heph_access_token'
+const REFRESH_TOKEN_KEY = 'heph_refresh_token'
+const AUTH_USER_KEY = 'heph_user'
+const ACCESS_TOKEN_ISSUED_AT_KEY = 'heph_access_token_issued_at'
+const ACCESS_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
 export type AuthUser = {
   id: string
   email: string
@@ -48,26 +54,39 @@ export type MementoDto = {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://heph-backend.onrender.com/api/v1'
 
 export function setAuthTokens(accessToken: string, refreshToken?: string) {
-  localStorage.setItem('heph_access_token', accessToken)
-  if (refreshToken) localStorage.setItem('heph_refresh_token', refreshToken)
+  localStorage.setItem(ACCESS_TOKEN_KEY, accessToken)
+  localStorage.setItem(ACCESS_TOKEN_ISSUED_AT_KEY, String(Date.now()))
+  if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
 }
 
 export function getAccessToken() {
-  return localStorage.getItem('heph_access_token')
+  const token = localStorage.getItem(ACCESS_TOKEN_KEY)
+  if (!token) return null
+
+  const issuedAtRaw = localStorage.getItem(ACCESS_TOKEN_ISSUED_AT_KEY)
+  const issuedAt = issuedAtRaw ? Number(issuedAtRaw) : NaN
+
+  if (!Number.isFinite(issuedAt) || Date.now() - issuedAt > ACCESS_TOKEN_MAX_AGE_MS) {
+    clearAuthTokens()
+    return null
+  }
+
+  return token
 }
 
 export function clearAuthTokens() {
-  localStorage.removeItem('heph_access_token')
-  localStorage.removeItem('heph_refresh_token')
-  localStorage.removeItem('heph_user')
+  localStorage.removeItem(ACCESS_TOKEN_KEY)
+  localStorage.removeItem(REFRESH_TOKEN_KEY)
+  localStorage.removeItem(AUTH_USER_KEY)
+  localStorage.removeItem(ACCESS_TOKEN_ISSUED_AT_KEY)
 }
 
 export function setStoredUser(user: AuthUser) {
-  localStorage.setItem('heph_user', JSON.stringify(user))
+  localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user))
 }
 
 export function getStoredUser(): AuthUser | null {
-  const raw = localStorage.getItem('heph_user')
+  const raw = localStorage.getItem(AUTH_USER_KEY)
   if (!raw) return null
 
   try {
@@ -79,6 +98,15 @@ export function getStoredUser(): AuthUser | null {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAccessToken()
+
+  if (!token && path !== '/auth/login') {
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.alert('Your session has expired. Please log in again.')
+      window.location.href = '/login'
+    }
+    throw new Error('Session expired. Please log in again.')
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
@@ -87,6 +115,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers || {}),
     },
   })
+
+  if (res.status === 401) {
+    clearAuthTokens()
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.alert('Your session has expired. Please log in again.')
+      window.location.href = '/login'
+    }
+    throw new Error('Session expired. Please log in again.')
+  }
 
   const json = (await res.json()) as ApiResponse<T> & { meta?: unknown }
   if (!res.ok || !json.success) {

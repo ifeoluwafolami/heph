@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { Heart } from "lucide-react";
+import { Heart, LogOut } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
+import { logout } from "@/lib/auth";
 
 interface LayoutProps {
     children: ReactNode;
@@ -20,6 +21,15 @@ export default function Layout({children}: LayoutProps) {
                     <NavLink to='/owo' className={navItemClass}>OWO</NavLink>
                     <NavLink to='/mementos' className={navItemClass}>MEMENTO</NavLink>
                     <NavLink to='/ounje' className={navItemClass}>OUNJE</NavLink>
+                    <button
+                        type="button"
+                        onClick={logout}
+                        aria-label="Logout"
+                        title="Logout"
+                        className="inline-flex items-center justify-center hover:scale-105 transition-transform duration-300"
+                    >
+                        <LogOut className="size-5 md:size-6" />
+                    </button>
                 </div>
             </header>
 

@@ -1,4 +1,4 @@
-import { Route, BrowserRouter, Routes, Navigate } from "react-router-dom"
+import { Route, HashRouter, Routes, Navigate } from "react-router-dom"
 import Homepage from "./pages/Homepage"
 import Login from "./pages/Login"
 import Dashboard from "./pages/Dashboard"
@@ -10,7 +10,7 @@ import { RequireAuth } from "@/lib/auth"
 function App() {
 
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/" element={<Homepage />}></Route>
         <Route path="/login" element={<Login />}></Route>
@@ -20,7 +20,7 @@ function App() {
         <Route path="/ounje" element={<RequireAuth><Ounje /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
 

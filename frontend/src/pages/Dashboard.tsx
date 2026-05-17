@@ -147,7 +147,7 @@ export default function Dashboard() {
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                     <RecentExpenses expenses={recentExpenses} />
-                    <RecentMementos mementos={recentMementos.map((m: any) => ({ title: m.title, preview: m.content.slice(0, 120), date: new Date(m.createdAt).toLocaleDateString() }))} />
+                    <RecentMementos mementos={recentMementos.map((m: any) => ({ title: m.title, preview: m.content, date: new Date(m.createdAt).toLocaleDateString() }))} />
                 </div>
 
                 <NewExpenseModal open={isNewExpenseOpen} onClose={() => setIsNewExpenseOpen(false)} />
