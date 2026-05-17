@@ -12,7 +12,7 @@ export default function Layout({children}: LayoutProps) {
 
     return (
         <div className="min-h-screen bg-claret text-pink font-pompiere tracking-widest flex flex-col">
-            <header className="fixed top-0 left-0 w-full h-16 flex justify-between px-4 md:px-10 items-center bg-claret">
+            <header className="fixed top-0 left-0 w-full h-16 flex justify-between px-4 md:px-10 items-center bg-claret z-10">
                 <Link to='/dashboard'>
                     <h1 className="font-modern font-black text-2xl md:text-4xl">heph</h1>
                 </Link>
