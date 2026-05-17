@@ -4,6 +4,7 @@ import RecentExpenses from "@/components/RecentExpenses";
 import EditBudgetsModal from "@/modals/EditBudgetsModal";
 import NewExpenseModal from "@/modals/NewExpenseModal";
 import { useState, useEffect } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getExpenseSummary, getBudgets, getExpenses } from "@/lib/api";
 
 // Example data removed — real data is loaded from API and kept in component state
@@ -106,11 +107,29 @@ export default function ExpenseTracker() {
                 <BudgetCategories categories={budgetCategories} />
 
                 <RecentExpenses expenses={expenseItems} showActions actionLabel="View all" />
-                <div className="mt-4 flex items-center gap-3 justify-center">
-                    <button disabled={expensePage <= 1} onClick={() => setExpensePage((p) => Math.max(1, p - 1))} className="rounded-lg px-3 py-2 border border-claret/20">Previous</button>
-                    <div>Page {expensePage}{expensesMeta?.total ? ` — ${expensesMeta.total} items` : ''}</div>
-                    <button disabled={expensesMeta && expensesMeta.total ? (expensePage * (expensesMeta.limit || 6) >= (expensesMeta.total || 0)) : false} onClick={() => setExpensePage((p) => p + 1)} className="rounded-lg px-3 py-2 border border-claret/20">Next</button>
-                </div>
+                {expensesMeta?.total && Math.ceil(expensesMeta.total / (expensesMeta.limit || 6)) > 1 ? (
+                    <div className="mt-4 flex items-center gap-4 justify-center">
+                        <button
+                            type="button"
+                            disabled={expensePage <= 1}
+                            onClick={() => setExpensePage((p) => Math.max(1, p - 1))}
+                            className="rounded-md border px-3 py-2 bg-claret text-pink disabled:opacity-40"
+                            aria-label="Previous page"
+                        >
+                            <ChevronLeft />
+                        </button>
+                        <div className="text-claret">Page {expensePage} / {Math.ceil(expensesMeta.total / (expensesMeta.limit || 6))}</div>
+                        <button
+                            type="button"
+                            disabled={expensePage >= Math.ceil(expensesMeta.total / (expensesMeta.limit || 6))}
+                            onClick={() => setExpensePage((p) => p + 1)}
+                            className="rounded-md border px-3 py-2 bg-claret text-pink disabled:opacity-40"
+                            aria-label="Next page"
+                        >
+                            <ChevronRight />
+                        </button>
+                    </div>
+                ) : null}
             </section>
 
             <NewExpenseModal open={isNewExpenseOpen} onClose={() => setIsNewExpenseOpen(false)} />

@@ -98,7 +98,7 @@ export default function Mementos() {
           {mementos.map((memento) => (
             <article
               key={memento._id}
-              className="w-full lg:w-[calc((100%-2rem)/4)] cursor-pointer rounded-2xl border border-claret/30 bg-pink text-claret p-6 md:p-8 shadow-xl transition-all hover:shadow-2xl focus-within:ring-2 focus-within:ring-claret focus-within:ring-offset-2 focus-within:ring-offset-pink flex flex-col"
+              className="w-full lg:w-[calc((100%-2rem)/4)] cursor-pointer rounded-2xl border border-claret/30 bg-pink text-claret p-6 shadow-xl transition-all hover:shadow-2xl focus-within:ring-2 focus-within:ring-claret focus-within:ring-offset-2 focus-within:ring-offset-pink flex flex-col"
               onClick={() => setSelectedMemento(memento)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -110,10 +110,10 @@ export default function Mementos() {
               role="button"
               aria-label={`Open details for ${memento.title}`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <h2 className="text-2xl md:text-3xl font-bold">{memento.title}</h2>
+              <div className="flex flex-col justify-between gap-3">
+                <h2 className="text-2xl font-bold order-2">{memento.title}</h2>
 
-                <div className="flex gap-2 shrink-0">
+                <div className="flex gap-0.5 shrink-0 justify-end">
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setSelectedMementoForEdit(memento) }}
@@ -135,10 +135,10 @@ export default function Mementos() {
                 </div>
               </div>
 
-              <p className="mt-4 text-lg md:text-xl tracking-normal whitespace-pre-wrap line-clamp-4 grow">{memento.content}</p>
+              <p className="mt-4 text-lg md:text-xl tracking-normal line-clamp-4">{memento.content}</p>
 
-              <div className="flex flex-col gap-1 text-sm md:text-base uppercase tracking-wider opacity-80 mt-auto">
-                <p className="mt-6">Created: {new Date(memento.createdAt).toLocaleDateString()}</p>
+              <div className="flex flex-col gap-1 text-sm md:text-base uppercase tracking-wider opacity-80 pt-6 mt-auto">
+                <p>Created: {new Date(memento.createdAt).toLocaleDateString()}</p>
                 {memento.editedAt ? <p>Edited: {new Date(memento.editedAt).toLocaleDateString()}</p> : null}
               </div>
             </article>

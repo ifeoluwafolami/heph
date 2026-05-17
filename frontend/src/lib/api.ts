@@ -51,7 +51,8 @@ export type MementoDto = {
   editedAt?: string | null
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://heph-backend.onrender.com/api/v1'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api/v1'
+// 'https://heph-backend.onrender.com/api/v1'
 
 export function setAuthTokens(accessToken: string, refreshToken?: string) {
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken)
