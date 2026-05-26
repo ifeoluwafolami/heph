@@ -51,7 +51,8 @@ export type MementoDto = {
   editedAt?: string | null
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://heph-backend.onrender.com/api/v1'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api/v1'
+// 'https://heph-backend.onrender.com/api/v1' 
 
 export function setAuthTokens(accessToken: string, refreshToken?: string) {
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken)
@@ -315,5 +316,38 @@ export async function updateBudget(id: string, payload: Partial<{ name: string; 
   return request<BudgetDto>(`/budgets/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
+  })
+}
+export type SidequestDto = {
+  _id: string
+  title: string
+  description: string
+  cost: number
+  completed: boolean
+  milestones?: Array<{ id: string; title: string; done: boolean }>
+  createdAt: string
+}
+
+export async function getSidequests(limit = 20, page = 1) {
+  return request<SidequestDto[]>(`/sidequests?limit=${limit}&page=${page}`)
+}
+
+export async function createSidequest(payload: { title: string; description: string; cost: number; milestones?: Array<{ id: string; title: string; done: boolean }> }) {
+  return request<SidequestDto>('/sidequests', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateSidequest(id: string, payload: Partial<{ title: string; description: string; cost: number; completed: boolean; milestones: Array<{ id: string; title: string; done: boolean }> }>) {
+  return request<SidequestDto>(`/sidequests/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteSidequest(id: string) {
+  return request<{ deleted: boolean }>(`/sidequests/${id}`, {
+    method: 'DELETE',
   })
 }

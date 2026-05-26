@@ -11,9 +11,14 @@ async function main() {
   await mongoose.connect(MONGO_URI)
   console.log('Connected to MongoDB')
 
-  const email = 'folamihephzibah@gmail.com'
-  const password = 'Hfo231100!'
-  const nickname = 'Heph'
+  const email = process.env.SEED_USER_EMAIL
+  const password = process.env.SEED_USER_PASSWORD
+  const nickname = process.env.SEED_USER_NICKNAME || 'Heph'
+
+  if (!email || !password) {
+    console.error('Missing SEED_USER_EMAIL or SEED_USER_PASSWORD environment variables')
+    process.exit(1)
+  }
 
   const passwordHash = await bcrypt.hash(password, 10)
 

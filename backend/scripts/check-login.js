@@ -8,8 +8,13 @@ const fetch = globalThis.fetch || require('node-fetch')
 const API_BASE = process.env.API_BASE || `http://localhost:${process.env.PORT || 4000}/api/v1`
 
 async function main() {
-  const email = 'folamihephzibah@gmail.com'
-  const password = 'Hfo231100!'
+  const email = process.env.CHECK_LOGIN_EMAIL
+  const password = process.env.CHECK_LOGIN_PASSWORD
+
+  if (!email || !password) {
+    console.error('Missing CHECK_LOGIN_EMAIL or CHECK_LOGIN_PASSWORD environment variables')
+    process.exit(1)
+  }
 
   const url = `${API_BASE}/auth/login`
   console.log('Checking login at', url)

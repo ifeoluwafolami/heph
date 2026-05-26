@@ -46,6 +46,18 @@ export default function NewExpenseModal({ open, onClose }: NewExpenseModalProps)
     return () => { mounted = false }
   }, [])
 
+  useEffect(() => {
+    if (!open) {
+      setTitle("")
+      setAmount("")
+      setCategory("")
+      setDate("")
+      setNote("")
+      setCreatingCategoryName(null)
+      setCreatingCategoryBudget("")
+    }
+  }, [open])
+
   if (!open) return null;
 
   async function handleSave() {

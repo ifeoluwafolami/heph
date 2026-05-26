@@ -17,10 +17,11 @@ export default function Layout({children}: LayoutProps) {
                     <h1 className="font-modern font-black text-2xl md:text-4xl">heph</h1>
                 </Link>
                 
-                <div className="flex gap-8">
+                <div className="flex gap-4 md:gap-8 text-sm md:text-base">
                     <NavLink to='/owo' className={navItemClass}>OWO</NavLink>
                     <NavLink to='/mementos' className={navItemClass}>MEMENTO</NavLink>
                     <NavLink to='/ounje' className={navItemClass}>OUNJE</NavLink>
+                    <NavLink to='/odyssey' className={navItemClass}>ODYSSEY</NavLink>
                     <button
                         type="button"
                         onClick={logout}

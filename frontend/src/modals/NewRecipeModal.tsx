@@ -1,6 +1,6 @@
 import { ModalBody, ModalFooter, ModalFrame, ModalHead } from "@/components/Modal";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createRecipe } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
@@ -12,6 +12,15 @@ export default function NewRecipeModal({ open, onClose }: NewRecipeModalProps) {
     const [calories, setCalories] = useState("0")
   const [notes, setNotes] = useState("")
   const toast = useToast()
+
+  useEffect(() => {
+    if (!open) {
+      setTitle("")
+      setServings("1")
+      setCalories("0")
+      setNotes("")
+    }
+  }, [open])
 
   if (!open) return null
 

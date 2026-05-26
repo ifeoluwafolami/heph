@@ -49,7 +49,7 @@ export default function BudgetCategories({ categories = defaultCategories }: Bud
           </button>
         </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {categories.map((category) => {
           // support backend BudgetDto shape: { name, monthlyBudget, spentAmount }
           const name = (category.name ?? category.name) as string

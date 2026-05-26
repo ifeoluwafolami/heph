@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard"
 import ExpenseTracker from "./pages/ExpenseTracker"
 import Mementos from "./pages/Mementos"
 import Ounje from "./pages/Ounje"
+import Odyssey from "./pages/Odyssey"
 import { RequireAuth } from "@/lib/auth"
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
         <Route path="/owo" element={<RequireAuth><ExpenseTracker /></RequireAuth>} />
         <Route path="/mementos" element={<RequireAuth><Mementos /></RequireAuth>} />
         <Route path="/ounje" element={<RequireAuth><Ounje /></RequireAuth>} />
+        <Route path="/odyssey" element={<RequireAuth><Odyssey /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </HashRouter>

@@ -1,6 +1,6 @@
 import { ModalBody, ModalFooter, ModalFrame, ModalHead } from "@/components/Modal";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createBudget } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
@@ -13,6 +13,13 @@ export default function NewBudgetModal({ open, onClose }: NewBudgetModalProps) {
   const [name, setName] = useState("")
   const [limit, setLimit] = useState("")
   const toast = useToast()
+
+  useEffect(() => {
+    if (!open) {
+      setName("")
+      setLimit("")
+    }
+  }, [open])
 
   if (!open) return null;
 
