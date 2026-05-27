@@ -66,7 +66,10 @@ export type MementoDto = {
   editedAt?: string | null
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://heph-backend.onrender.com/api/v1' 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://heph-backend.onrender.com/api/v1'
+// 'http://localhost:4000/api/v1'
+// 'https://heph-backend.onrender.com/api/v1' 
+
 
 export function setAuthTokens(accessToken: string, refreshToken?: string) {
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken)
@@ -115,7 +118,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAccessToken()
   const currentPath = getCurrentClientPath()
 
-  if (!token && path !== '/auth/login' && path !== '/auth/register') {
+  if (!token && path !== '/auth/login') {
     if (currentPath !== '/login') {
       window.alert('Your session has expired. Please log in again.')
       redirectToLogin()

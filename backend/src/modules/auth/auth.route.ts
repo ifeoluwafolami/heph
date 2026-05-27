@@ -1,25 +1,11 @@
 import { Router } from 'express'
 import { User } from '../users/user.model'
-import { registerSchema, loginSchema } from '../../validation/users.schema'
-import { hashPassword, comparePassword } from '../../utils/hash'
+import { loginSchema } from '../../validation/users.schema'
+import { comparePassword } from '../../utils/hash'
 import { signToken, verifyToken } from '../../utils/jwt'
 import { requireAuth } from '../../middleware/auth.middleware'
 
 const router = Router()
-
-router.post('/register', async (req, res) => {
-  const parsed = registerSchema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'Invalid input', details: parsed.error.errors } })
-  const { email, password, nickname } = parsed.data
-  const existing = await User.findOne({ email })
-  if (existing) return res.status(409).json({ success: false, error: { code: 'USER_EXISTS', message: 'User already exists' } })
-  const passwordHash = await hashPassword(password)
-  const u = new User({ email, passwordHash, nickname })
-  await u.save()
-  const accessToken = signToken({ userId: String(u._id), type: 'access' }, '7d')
-  const refreshToken = signToken({ userId: String(u._id), type: 'refresh' }, '30d')
-  res.status(201).json({ success: true, data: { accessToken, refreshToken, user: { id: u._id, email: u.email, nickname: u.nickname } } })
-})
 
 router.post('/login', async (req, res) => {
   const parsed = loginSchema.safeParse(req.body)

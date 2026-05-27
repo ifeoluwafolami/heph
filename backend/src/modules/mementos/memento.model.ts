@@ -4,7 +4,7 @@ const MementoSchema = new Schema(
   {
     userId: { type: Types.ObjectId, ref: 'User', required: true },
     title: { type: String, required: true },
-    content: { type: String, required: true },
+    content: { type: String, default: '' },
     editedAt: { type: Date, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } }

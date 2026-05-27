@@ -24,12 +24,15 @@ router.post('/', async (req, res) => {
   const userId = req.auth?.userId
   if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_ERROR' } })
 
-  const { title, content } = req.body as { title: string; content: string }
-  if (!title || !content) {
-    return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'title and content are required' } })
+  const { title, content } = req.body as { title?: string; content?: string }
+  const normalizedTitle = String(title || '').trim()
+  const normalizedContent = String(content || '').trim()
+
+  if (!normalizedTitle) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'title is required' } })
   }
 
-  const item = new Memento({ userId: new Types.ObjectId(userId), title, content })
+  const item = new Memento({ userId: new Types.ObjectId(userId), title: normalizedTitle, content: normalizedContent })
   await item.save()
   res.status(201).json({ success: true, data: item })
 })

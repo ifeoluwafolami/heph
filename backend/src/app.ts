@@ -3,7 +3,6 @@ import helmet from 'helmet'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import healthRouter from './modules/health/health.route'
-import usersRouter from './modules/users/users.route'
 import authRouter from './modules/auth/auth.route'
 import expensesRouter from './modules/expenses/expenses.route'
 import budgetsRouter from './modules/budgets/budgets.route'
@@ -27,7 +26,6 @@ app.use(
 app.use(express.json())
 
 app.use('/api/v1/health', healthRouter)
-app.use('/api/v1/users', usersRouter)
 app.use('/api/v1/auth', authRouter)
 app.use('/api/v1/expenses', expensesRouter)
 app.use('/api/v1/budgets', budgetsRouter)

@@ -23,14 +23,21 @@ export default function NewMementoModal({ open, onClose }: NewMementoModalProps)
   if (!open) return null
 
   async function handleCreate() {
-    if (!title) return
+    const normalizedTitle = title.trim()
+    if (!normalizedTitle) {
+      toast.push({ type: 'error', message: 'Title is required' })
+      return
+    }
     setLoading(true)
     try {
-      await createMemento({ title, content })
+      await createMemento({ title: normalizedTitle, content })
       toast.push({ type: 'success', message: 'Memento created' })
       window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'memento' } }))
       onClose()
-    } catch (err) { console.error(err) }
+    } catch (err: any) {
+      console.error(err)
+      toast.push({ type: 'error', message: err?.message || 'Failed to create memento' })
+    }
     finally {
       setLoading(false)
     }

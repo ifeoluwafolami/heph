@@ -4,7 +4,7 @@ import { getSidequests, deleteSidequest, updateSidequest } from "@/lib/api";
 import NewSidequestModal from "@/modals/NewSidequestModal";
 import EditSidequestModal from "@/modals/EditSidequestModal";
 import DeleteConfirmationModal from "@/modals/DeleteConfirmationModal";
-import { Edit2, Trash2, Eye, Shuffle, CheckCircle2, Circle } from "lucide-react";
+import { Edit2, Trash2, Shuffle, CheckCircle2, Circle } from "lucide-react";
 import type { SidequestDto } from "@/lib/api";
 
 type UiMilestone = { id: string; title: string; done: boolean }
@@ -33,6 +33,14 @@ function isCompletedSidequest(sq: SidequestDto): boolean {
   const milestones = normalizeMilestones((sq as any).milestones)
   if (milestones.length > 0) return milestones.every((m) => m.done)
   return Boolean(sq.completed)
+}
+
+function getSidequestStatus(sq: SidequestDto): 'Queued' | 'Ongoing' | 'Completed' {
+  if (isCompletedSidequest(sq)) return 'Completed'
+  const milestones = normalizeMilestones((sq as any).milestones)
+  if (milestones.length === 0) return 'Queued'
+  const doneCount = milestones.filter((m) => m.done).length
+  return doneCount === 0 ? 'Queued' : 'Ongoing'
 }
 
 export default function Odyssey() {
@@ -177,22 +185,38 @@ export default function Odyssey() {
               const progress = getMilestoneProgress(sq)
               const milestones = normalizeMilestones((sq as any).milestones)
               return (
-                <div key={sq._id} className={`rounded-2xl border bg-pink p-4 md:p-6 shadow-lg hover:shadow-xl transition-shadow ${sq.completed ? 'border-claret/40 opacity-80' : 'border-claret/20'}`}>
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div
+                  key={sq._id}
+                  className={`rounded-2xl border bg-pink p-4 md:p-6 shadow-lg hover:shadow-xl transition-shadow cursor-pointer ${sq.completed ? 'border-claret/40 opacity-80' : 'border-claret/20'}`}
+                  onClick={() => handleViewDetails(sq)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      handleViewDetails(sq)
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Open details for ${sq.title}`}
+                >
+                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-start md:items-center gap-3">
                         <button
                           type="button"
-                          onClick={() => handleToggleComplete(sq)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleToggleComplete(sq)
+                          }}
                           title={sq.completed ? "Mark incomplete" : "Mark complete"}
-                          className="shrink-0 text-claret hover:scale-110 transition-transform"
+                          className="shrink-0 text-claret hover:scale-110 transition-transform mt-1"
                         >
                           {sq.completed
                             ? <CheckCircle2 className="size-6 fill-claret text-pink" />
                             : <Circle className="size-6" />
                           }
                         </button>
-                        <div className="flex flex-row items-center gap-2 md:gap-4">
+                        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
                           <h3 className={`text-lg capitalize md:text-2xl font-bold text-claret ${sq.completed ? 'line-through opacity-60' : ''}`}>{sq.title}</h3>
                           <p className="text-xs md:text-base font-black bg-claret w-fit p-2 text-pink">COST: {sq.cost}</p>
                         </div>
@@ -218,7 +242,10 @@ export default function Odyssey() {
                               <li key={m.id}>
                                 <button
                                   type="button"
-                                  onClick={() => handleToggleMilestone(sq, m.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleToggleMilestone(sq, m.id)
+                                  }}
                                   className="flex items-center gap-2 text-left text-claret hover:underline"
                                 >
                                   {m.done ? <CheckCircle2 className="size-4 text-claret" /> : <Circle className="size-4 text-claret/60" />}
@@ -230,15 +257,28 @@ export default function Odyssey() {
                         </div>
                       )}
                     </div>
-                    <div className="flex gap-3 shrink-0">
-                      <button type="button" onClick={() => handleViewDetails(sq)} title="View Details" className="inline-flex items-center justify-center rounded-2xl border border-claret/30 bg-transparent p-2 md:p-3 text-claret hover:bg-claret/10 transition-all">
-                        <Eye className="size-5" />
+                    <div className="flex gap-0.5 shrink-0 justify-end">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleEdit(sq)
+                        }}
+                        title="Edit"
+                        className="text-xs md:text-sm uppercase tracking-wider p-2 text-claret hover:bg-claret hover:rounded-full hover:text-pink hover:scale-110 transition-transform duration-300 ease-in-out drop-shadow-[0_2px_6px_rgba(103,6,38,0.45)]"
+                      >
+                        <Edit2 className="size-4 md:size-5" />
                       </button>
-                      <button type="button" onClick={() => handleEdit(sq)} title="Edit" className="inline-flex items-center justify-center rounded-2xl border border-claret/30 bg-transparent p-2 md:p-3 text-claret hover:bg-claret/10 transition-all">
-                        <Edit2 className="size-5" />
-                      </button>
-                      <button type="button" onClick={() => handleDelete(sq)} title="Delete" className="inline-flex items-center justify-center rounded-2xl border border-claret/30 bg-transparent p-2 md:p-3 text-claret hover:bg-red-500 hover:border-red-500 hover:text-pink transition-all">
-                        <Trash2 className="size-5" />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDelete(sq)
+                        }}
+                        title="Delete"
+                        className="text-xs md:text-sm uppercase tracking-wider p-2 text-claret hover:bg-claret hover:rounded-full hover:text-pink hover:scale-110 transition-transform duration-300 ease-in-out drop-shadow-[0_2px_6px_rgba(103,6,38,0.45)]"
+                      >
+                        <Trash2 className="size-4 md:size-5" />
                       </button>
                     </div>
                   </div>
@@ -356,7 +396,7 @@ export default function Odyssey() {
               )}
               <div>
                 <p className="text-sm uppercase tracking-widest text-claret/60">Status</p>
-                <p className="text-base text-claret mt-2 font-bold">{viewDetailsSidequest.completed ? 'Completed ✓' : 'In Progress'}</p>
+                <p className="text-base text-claret mt-2 font-bold">{getSidequestStatus(viewDetailsSidequest)}</p>
               </div>
               <div>
                 <p className="text-sm uppercase tracking-widest text-claret/60">Created</p>
