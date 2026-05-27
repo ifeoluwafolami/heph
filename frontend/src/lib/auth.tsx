@@ -17,5 +17,5 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
 export function logout() {
   clearAuthTokens()
-  window.location.href = '/login'
+  window.location.hash = '#/login'
 }

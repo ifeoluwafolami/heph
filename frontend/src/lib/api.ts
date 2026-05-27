@@ -21,6 +21,21 @@ const AUTH_USER_KEY = 'heph_user'
 const ACCESS_TOKEN_ISSUED_AT_KEY = 'heph_access_token_issued_at'
 const ACCESS_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000
 
+function getCurrentClientPath() {
+  if (typeof window === 'undefined') return ''
+  const hash = window.location.hash || ''
+  if (hash.startsWith('#')) {
+    const p = hash.slice(1)
+    return p.startsWith('/') ? p : `/${p}`
+  }
+  return window.location.pathname
+}
+
+function redirectToLogin() {
+  if (typeof window === 'undefined') return
+  window.location.hash = '#/login'
+}
+
 export type AuthUser = {
   id: string
   email: string
@@ -98,11 +113,12 @@ export function getStoredUser(): AuthUser | null {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAccessToken()
+  const currentPath = getCurrentClientPath()
 
-  if (!token && path !== '/auth/login') {
-    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+  if (!token && path !== '/auth/login' && path !== '/auth/register') {
+    if (currentPath !== '/login') {
       window.alert('Your session has expired. Please log in again.')
-      window.location.href = '/login'
+      redirectToLogin()
     }
     throw new Error('Session expired. Please log in again.')
   }
@@ -116,11 +132,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   })
 
-  if (res.status === 401) {
+  if (res.status === 401 && path !== '/auth/login') {
     clearAuthTokens()
-    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    if (currentPath !== '/login') {
       window.alert('Your session has expired. Please log in again.')
-      window.location.href = '/login'
+      redirectToLogin()
     }
     throw new Error('Session expired. Please log in again.')
   }
