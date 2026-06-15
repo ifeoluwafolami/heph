@@ -133,7 +133,12 @@ export default function DopamineCalendar() {
   }, [habits]);
 
   const filteredHabits = useMemo(
-    () => habits.filter((habit) => filter === "all" || habit.frequency === filter),
+    () => {
+      const order: Record<HabitFrequency, number> = { daily: 0, weekly: 1, monthly: 2 };
+      return habits
+        .filter((habit) => filter === "all" || habit.frequency === filter)
+        .sort((a, b) => filter === "all" ? order[a.frequency] - order[b.frequency] : 0);
+    },
     [filter, habits]
   );
 

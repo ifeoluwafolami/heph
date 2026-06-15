@@ -8,6 +8,31 @@ const router = Router()
 
 router.use(requireAuth)
 
+function getLagosMonthRange(monthInput?: string) {
+  let year: number
+  let month: number
+
+  if (monthInput && /^\d{4}-\d{2}$/.test(monthInput)) {
+    const [rawYear, rawMonth] = monthInput.split('-')
+    year = Number(rawYear)
+    month = Number(rawMonth) - 1
+  } else {
+    const parts = new Intl.DateTimeFormat('en-NG', {
+      timeZone: 'Africa/Lagos',
+      year: 'numeric',
+      month: 'numeric',
+    }).formatToParts(new Date())
+    year = Number(parts.find((part) => part.type === 'year')?.value)
+    month = Number(parts.find((part) => part.type === 'month')?.value) - 1
+  }
+
+  return {
+    first: new Date(Date.UTC(year, month, 1) - 60 * 60 * 1000),
+    next: new Date(Date.UTC(year, month + 1, 1) - 60 * 60 * 1000),
+    monthKey: `${year}-${String(month + 1).padStart(2, '0')}`,
+  }
+}
+
 router.get('/', async (req, res) => {
   const userId = req.auth?.userId
   if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_ERROR' } })
@@ -20,12 +45,10 @@ router.get('/', async (req, res) => {
   // compute spentAmount for the current month for each budget category
   const total = await BudgetCategory.countDocuments({ userId: new Types.ObjectId(userId) })
   const items = await BudgetCategory.find({ userId: new Types.ObjectId(userId) }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean()
-  const now = new Date()
-  const first = new Date(now.getFullYear(), now.getMonth(), 1)
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+  const { first, next } = getLagosMonthRange()
 
   const agg = await Expense.aggregate([
-    { $match: { userId: new Types.ObjectId(userId), expenseDate: { $gte: first, $lte: last } } },
+    { $match: { userId: new Types.ObjectId(userId), expenseDate: { $gte: first, $lt: next } } },
     { $group: { _id: '$categoryId', total: { $sum: '$amount' } } },
   ])
 
@@ -40,6 +63,43 @@ router.get('/', async (req, res) => {
   }))
 
   res.json({ success: true, data: withSpent, meta: { total, page, limit } })
+})
+
+router.get('/history', async (req, res) => {
+  const userId = req.auth?.userId
+  if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_ERROR' } })
+
+  const { first, next, monthKey } = getLagosMonthRange(typeof req.query.month === 'string' ? req.query.month : undefined)
+  const userObjectId = new Types.ObjectId(userId)
+  const categories = await BudgetCategory.find({ userId: userObjectId }).sort({ createdAt: -1 }).lean()
+  const agg = await Expense.aggregate([
+    { $match: { userId: userObjectId, expenseDate: { $gte: first, $lt: next } } },
+    { $group: { _id: '$categoryId', total: { $sum: '$amount' } } },
+  ])
+
+  const map = new Map<string, number>()
+  agg.forEach((a: any) => {
+    if (a._id) map.set(String(a._id), a.total || 0)
+  })
+
+  const categoriesWithSpent = categories.map((category: any) => ({
+    _id: category._id,
+    name: category.name,
+    monthlyBudget: category.monthlyBudget,
+    spentAmount: map.get(String(category._id)) || 0,
+  }))
+  const totalSpent = categoriesWithSpent.reduce((sum, category) => sum + category.spentAmount, 0)
+  const totalBudgeted = categoriesWithSpent.reduce((sum, category) => sum + category.monthlyBudget, 0)
+
+  res.json({
+    success: true,
+    data: {
+      month: monthKey,
+      totalSpent,
+      totalBudgeted,
+      categories: categoriesWithSpent,
+    },
+  })
 })
 
 router.post('/', async (req, res) => {

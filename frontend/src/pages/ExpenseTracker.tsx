@@ -7,7 +7,7 @@ import DeleteConfirmationModal from "@/modals/DeleteConfirmationModal";
 import NewExpenseModal from "@/modals/NewExpenseModal";
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, MoreVertical, Pencil, PiggyBank, Plus, Save, Trash2, Wallet } from "lucide-react";
-import { getExpenseSummary, getBudgets, getExpenses, type BudgetDto, type ExpenseDto } from "@/lib/api";
+import { getExpenseSummary, getBudgets, getExpenses, getBudgetHistory, type BudgetDto, type ExpenseDto } from "@/lib/api";
 
 // Example data removed — real data is loaded from API and kept in component state
 type OwoTab = "savings" | "spending";
@@ -39,11 +39,27 @@ type ExpenseListItem = {
     amount: string;
     category?: string | null;
 };
+type BudgetHistory = {
+    month: string;
+    totalSpent: number;
+    totalBudgeted: number;
+    categories: Array<BudgetDto & { spentAmount: number }>;
+};
 
 const SAVINGS_STORAGE_KEY = "heph_owo_savings_targets";
 
 function todayKey() {
     return new Date().toISOString().slice(0, 10);
+}
+
+function monthKey(date = new Date()) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function previousMonthKey() {
+    const date = new Date();
+    date.setMonth(date.getMonth() - 1);
+    return monthKey(date);
 }
 
 function getSavedAmount(target: SavingsTarget) {
@@ -79,6 +95,8 @@ export default function ExpenseTracker() {
     const [expenseItems, setExpenseItems] = useState<ExpenseListItem[]>([])
     const [expensePage, setExpensePage] = useState(1)
     const [expensesMeta, setExpensesMeta] = useState<{ total?: number; page?: number; limit?: number } | null>(null)
+    const [budgetHistoryMonth, setBudgetHistoryMonth] = useState(previousMonthKey)
+    const [budgetHistory, setBudgetHistory] = useState<BudgetHistory | null>(null)
     const [savingsTargets, setSavingsTargets] = useState<SavingsTarget[]>(loadSavingsTargets)
     const [savingsTitle, setSavingsTitle] = useState("")
     const [savingsTargetAmount, setSavingsTargetAmount] = useState("")
@@ -143,6 +161,21 @@ export default function ExpenseTracker() {
     useEffect(() => {
         localStorage.setItem(SAVINGS_STORAGE_KEY, JSON.stringify(savingsTargets));
     }, [savingsTargets]);
+
+    useEffect(() => {
+        let mounted = true;
+        async function loadHistory() {
+            try {
+                const history = await getBudgetHistory(budgetHistoryMonth);
+                if (mounted) setBudgetHistory(history);
+            } catch {
+                if (mounted) setBudgetHistory(null);
+            }
+        }
+
+        loadHistory();
+        return () => { mounted = false };
+    }, [budgetHistoryMonth]);
 
     function addSavingsTarget() {
         const cleanTitle = savingsTitle.trim();
@@ -390,6 +423,48 @@ export default function ExpenseTracker() {
                 </section>
 
                 <BudgetCategories categories={budgetCategories} />
+
+                <section className="my-6 rounded-2xl bg-pink text-claret p-6 md:p-8 w-full shadow-xl border border-claret/20">
+                    <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h2 className="text-2xl md:text-3xl font-bold uppercase">Budget History</h2>
+                            <p className="mt-1 text-lg">Recall previous monthly spend without changing this month’s reset totals.</p>
+                        </div>
+                        <label className="space-y-1">
+                            <span className="text-sm uppercase tracking-widest">Month</span>
+                            <input
+                                type="month"
+                                value={budgetHistoryMonth}
+                                onChange={(event) => setBudgetHistoryMonth(event.target.value)}
+                                className="w-full rounded-xl border border-claret/30 bg-pink px-3 py-2"
+                            />
+                        </label>
+                    </div>
+                    {budgetHistory ? (
+                        <>
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <div className="rounded-xl border border-claret/20 p-4">
+                                    <p className="text-sm uppercase tracking-widest opacity-80">Spent</p>
+                                    <p className="mt-2 text-3xl font-bold">N{budgetHistory.totalSpent.toLocaleString()}</p>
+                                </div>
+                                <div className="rounded-xl border border-claret/20 p-4">
+                                    <p className="text-sm uppercase tracking-widest opacity-80">Budgeted</p>
+                                    <p className="mt-2 text-3xl font-bold">N{budgetHistory.totalBudgeted.toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                {budgetHistory.categories.map((category) => (
+                                    <div key={category._id || category.name} className="rounded-xl border border-claret/20 p-4">
+                                        <p className="text-xl font-bold">{category.name}</p>
+                                        <p className="mt-2 text-sm uppercase tracking-widest opacity-80">N{Number(category.spentAmount || 0).toLocaleString()} / N{category.monthlyBudget.toLocaleString()}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <p className="text-lg">No history available for this month.</p>
+                    )}
+                </section>
 
                 <RecentExpenses expenses={expenseItems} showActions actionLabel="View all" />
                 {expensesMeta?.total && Math.ceil(expensesMeta.total / (expensesMeta.limit || 6)) > 1 ? (

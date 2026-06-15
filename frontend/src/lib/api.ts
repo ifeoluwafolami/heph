@@ -241,6 +241,15 @@ export async function getBudgets(page = 1, limit = 50) {
   return request<BudgetDto[]>(`/budgets?limit=${limit}&page=${page}`)
 }
 
+export async function getBudgetHistory(month: string) {
+  return request<{
+    month: string
+    totalSpent: number
+    totalBudgeted: number
+    categories: Array<BudgetDto & { spentAmount: number }>
+  }>(`/budgets/history?month=${encodeURIComponent(month)}`)
+}
+
 export async function getExpenses(limit = 10, page = 1) {
   return request<ExpenseDto[]>(`/expenses?limit=${limit}&page=${page}`)
 }

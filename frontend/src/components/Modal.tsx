@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, type ReactNode } from "react";
+import React, { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import ReactDOM from "react-dom";
 import { getFocusableElements, nextFocus, usePortal } from "./HelperFunctions";
 
@@ -24,6 +24,7 @@ export const ModalFrame: React.FC<FrameProps> = ({
   const portal = usePortal();
   const previousFocus = useRef<HTMLElement | null>(null);
   const previousOverflow = useRef("");
+  const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
 
   const container = useRef<HTMLDivElement | null>(null);
 
@@ -41,9 +42,12 @@ export const ModalFrame: React.FC<FrameProps> = ({
       });
     };
     const shouldConfirm = shouldConfirmClose ? shouldConfirmClose() : hasFilledFormFields();
-    if (shouldConfirm && !window.confirm(confirmCloseMessage)) return;
+    if (shouldConfirm) {
+      setIsCloseConfirmOpen(true);
+      return;
+    }
     onClose();
-  }, [confirmCloseMessage, onClose, shouldConfirmClose]);
+  }, [onClose, shouldConfirmClose]);
 
   // Close on click outside
   const onOverlayClick = (e: React.MouseEvent) => {
@@ -115,6 +119,34 @@ export const ModalFrame: React.FC<FrameProps> = ({
 
         {children}
       </div>
+      {isCloseConfirmOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-claret/70 p-4"
+          role="alertdialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-claret/20 bg-pink p-6 text-claret shadow-2xl">
+            <h2 className="text-2xl font-bold uppercase">Close Modal?</h2>
+            <p className="mt-3 text-lg">{confirmCloseMessage}</p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setIsCloseConfirmOpen(false)}
+                className="rounded-2xl border border-claret px-4 py-3 text-sm uppercase tracking-widest hover:bg-claret hover:text-pink"
+              >
+                Keep Editing
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-2xl border border-claret bg-claret px-4 py-3 text-sm uppercase tracking-widest text-pink hover:bg-claret/90"
+              >
+                Close Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>,
     portal.current
   );
