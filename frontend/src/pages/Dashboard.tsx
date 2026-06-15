@@ -1,7 +1,9 @@
 import Layout from "@/components/Layout";
 import MonthlyOverview from "@/components/MonthlyOverview";
+import PaginationControls from "@/components/PaginationControls";
 import RecentExpenses from "@/components/RecentExpenses";
 import RecentMementos from "@/components/RecentMementos";
+import { useToast } from "@/components/Toast";
 import { Check, Circle } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
@@ -37,6 +39,7 @@ const SAVINGS_STORAGE_KEY = "heph_owo_savings_targets"
 const SAVINGS_MIGRATION_KEY = "heph_owo_savings_targets_server_migrated"
 const HABITS_STORAGE_KEY = "heph_dopamine_calendar"
 const HABITS_MIGRATION_KEY = "heph_dopamine_calendar_server_migrated"
+const DASHBOARD_HABITS_PER_PAGE = 6
 
 function todayKey() {
     return new Date().toISOString().slice(0, 10)
@@ -164,6 +167,7 @@ async function getSyncedHabits() {
 }
 
 export default function Dashboard() {
+    const toast = useToast()
     const [greeting, setGreeting] = useState("");
     const [nickname, setNickname] = useState("princess");
 
@@ -200,6 +204,7 @@ export default function Dashboard() {
     const [recentMementos, setRecentMementos] = useState<MementoDto[]>([])
     const [totalSavedThisMonth, setTotalSavedThisMonth] = useState(0)
     const [habits, setHabits] = useState<HabitDto[]>([])
+    const [habitsPage, setHabitsPage] = useState(1)
 
     async function loadLocalOverview() {
         const savings = await getSyncedSavingsTargets().catch(() => loadCachedSavingsTargets())
@@ -294,16 +299,22 @@ export default function Dashboard() {
         const today = todayKey()
         try {
             const updated = await toggleHabitLog(habitId, today)
+            const checkedIn = updated.logs.includes(today)
             setHabits((prev) => {
                 const nextHabits = prev.map((habit) => habit._id === habitId ? updated : habit)
                 cacheHabits(nextHabits)
                 return nextHabits
             })
             window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'habit' } }))
+            toast.push({ type: "success", message: checkedIn ? "Habit checked in." : "Check-in removed." })
         } catch {
-            // Keep the visible state unchanged if the shared account update fails.
+            toast.push({ type: "error", message: "Could not update that check-in." })
         }
     }
+
+    const habitsTotalPages = Math.max(1, Math.ceil(habits.length / DASHBOARD_HABITS_PER_PAGE))
+    const safeHabitsPage = Math.min(habitsPage, habitsTotalPages)
+    const paginatedHabits = habits.slice((safeHabitsPage - 1) * DASHBOARD_HABITS_PER_PAGE, safeHabitsPage * DASHBOARD_HABITS_PER_PAGE)
 
     return (
         <Layout>
@@ -321,7 +332,7 @@ export default function Dashboard() {
                         <p className="text-lg md:text-xl">No habits yet. Add some in the Dopamine Calendar.</p>
                     ) : (
                         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                            {habits.map((habit) => {
+                            {paginatedHabits.map((habit) => {
                                 const doneToday = habit.logs.includes(todayKey())
                                 return (
                                     <button
@@ -337,6 +348,12 @@ export default function Dashboard() {
                             })}
                         </div>
                     )}
+                    <PaginationControls
+                        page={safeHabitsPage}
+                        totalPages={habitsTotalPages}
+                        onPageChange={setHabitsPage}
+                        label="Habits"
+                    />
                 </section>
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">

@@ -1,12 +1,14 @@
 import BudgetCategories from "@/components/BudgetCategories";
 import Layout from "@/components/Layout";
 import { ModalBody, ModalFooter, ModalFrame, ModalHead } from "@/components/Modal";
+import PaginationControls from "@/components/PaginationControls";
 import RecentExpenses from "@/components/RecentExpenses";
+import { useToast } from "@/components/Toast";
 import EditBudgetsModal from "@/modals/EditBudgetsModal";
 import DeleteConfirmationModal from "@/modals/DeleteConfirmationModal";
 import NewExpenseModal from "@/modals/NewExpenseModal";
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, MoreVertical, Pencil, PiggyBank, Plus, Save, Trash2, Wallet } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, MoreVertical, Pencil, PiggyBank, Plus, Save, Trash2, Wallet } from "lucide-react";
 import {
     createSavingsTarget,
     createSavingsTransaction,
@@ -57,6 +59,7 @@ type BudgetHistory = {
 
 const SAVINGS_STORAGE_KEY = "heph_owo_savings_targets";
 const SAVINGS_MIGRATION_KEY = "heph_owo_savings_targets_server_migrated";
+const SAVINGS_TARGETS_PER_PAGE = 4;
 
 function todayKey() {
     return new Date().toISOString().slice(0, 10);
@@ -136,6 +139,7 @@ async function getSyncedSavingsTargets() {
 }
 
 export default function ExpenseTracker() {
+    const toast = useToast();
     const [activeTab, setActiveTab] = useState<OwoTab>("savings");
     const [isNewExpenseOpen, setIsNewExpenseOpen] = useState(false);
     const [isEditBudgetsOpen, setIsEditBudgetsOpen] = useState(false);
@@ -156,6 +160,7 @@ export default function ExpenseTracker() {
     const [editSavingsTitle, setEditSavingsTitle] = useState("")
     const [editSavingsTargetAmount, setEditSavingsTargetAmount] = useState("")
     const [deletingSavingsTarget, setDeletingSavingsTarget] = useState<SavingsTargetDto | null>(null)
+    const [savingsPage, setSavingsPage] = useState(1)
 
     useEffect(() => {
         let mounted = true
@@ -232,41 +237,56 @@ export default function ExpenseTracker() {
         const cleanTitle = savingsTitle.trim();
         const cleanAmount = Number(savingsTargetAmount);
         if (!cleanTitle || !Number.isFinite(cleanAmount) || cleanAmount <= 0) return;
-        const created = await createSavingsTarget({ title: cleanTitle, targetAmount: cleanAmount, transactions: [] });
-        setSavingsTargets((prev) => {
-            const nextTargets = [created, ...prev];
-            cacheSavingsTargets(nextTargets);
-            return nextTargets;
-        });
-        setSavingsTitle("");
-        setSavingsTargetAmount("");
-        window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
+        try {
+            const created = await createSavingsTarget({ title: cleanTitle, targetAmount: cleanAmount, transactions: [] });
+            setSavingsTargets((prev) => {
+                const nextTargets = [created, ...prev];
+                cacheSavingsTargets(nextTargets);
+                return nextTargets;
+            });
+            setSavingsTitle("");
+            setSavingsTargetAmount("");
+            window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
+            toast.push({ type: "success", message: "Savings target added." });
+        } catch {
+            toast.push({ type: "error", message: "Could not add that savings target." });
+        }
     }
 
     async function updateSavings(targetId: string, direction: "deposit" | "withdraw") {
         const amount = Number(savingsAmounts[targetId] || 0);
         if (!Number.isFinite(amount) || amount <= 0) return;
-        const updated = await createSavingsTransaction(targetId, { type: direction, amount, date: todayKey() });
-        setSavingsTargets((prev) => {
-            const nextTargets = prev.map((target) => target._id === targetId ? updated : target);
-            cacheSavingsTargets(nextTargets);
-            return nextTargets;
-        });
-        setSelectedSavingsTarget((target) => target?._id === targetId ? updated : target);
-        setSavingsAmounts((prev) => ({ ...prev, [targetId]: "" }));
-        window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
+        try {
+            const updated = await createSavingsTransaction(targetId, { type: direction, amount, date: todayKey() });
+            setSavingsTargets((prev) => {
+                const nextTargets = prev.map((target) => target._id === targetId ? updated : target);
+                cacheSavingsTargets(nextTargets);
+                return nextTargets;
+            });
+            setSelectedSavingsTarget((target) => target?._id === targetId ? updated : target);
+            setSavingsAmounts((prev) => ({ ...prev, [targetId]: "" }));
+            window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
+            toast.push({ type: "success", message: direction === "deposit" ? "Savings updated." : "Withdrawal recorded." });
+        } catch {
+            toast.push({ type: "error", message: direction === "deposit" ? "Could not save that money." : "Could not record that withdrawal." });
+        }
     }
 
     async function deleteSavingsTarget(targetId: string) {
-        await deleteSavingsTargetApi(targetId);
-        setSavingsTargets((prev) => {
-            const nextTargets = prev.filter((target) => target._id !== targetId);
-            cacheSavingsTargets(nextTargets);
-            return nextTargets;
-        });
-        setDeletingSavingsTarget(null);
-        setSelectedSavingsTarget(null);
-        window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
+        try {
+            await deleteSavingsTargetApi(targetId);
+            setSavingsTargets((prev) => {
+                const nextTargets = prev.filter((target) => target._id !== targetId);
+                cacheSavingsTargets(nextTargets);
+                return nextTargets;
+            });
+            setDeletingSavingsTarget(null);
+            setSelectedSavingsTarget(null);
+            window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
+            toast.push({ type: "success", message: "Savings target deleted." });
+        } catch {
+            toast.push({ type: "error", message: "Could not delete that savings target." });
+        }
     }
 
     function openEditSavingsTarget(target: SavingsTargetDto) {
@@ -281,19 +301,30 @@ export default function ExpenseTracker() {
         const cleanTitle = editSavingsTitle.trim();
         const cleanAmount = Number(editSavingsTargetAmount);
         if (!cleanTitle || !Number.isFinite(cleanAmount) || cleanAmount <= 0) return;
-        const updated = await updateSavingsTarget(editingSavingsTarget._id, { title: cleanTitle, targetAmount: cleanAmount });
-        setSavingsTargets((prev) => {
-            const nextTargets = prev.map((target) => target._id === editingSavingsTarget._id ? updated : target);
-            cacheSavingsTargets(nextTargets);
-            return nextTargets;
-        });
-        setSelectedSavingsTarget((target) => target?._id === editingSavingsTarget._id ? updated : target);
-        setEditingSavingsTarget(null);
-        window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
+        try {
+            const updated = await updateSavingsTarget(editingSavingsTarget._id, { title: cleanTitle, targetAmount: cleanAmount });
+            setSavingsTargets((prev) => {
+                const nextTargets = prev.map((target) => target._id === editingSavingsTarget._id ? updated : target);
+                cacheSavingsTargets(nextTargets);
+                return nextTargets;
+            });
+            setSelectedSavingsTarget((target) => target?._id === editingSavingsTarget._id ? updated : target);
+            setEditingSavingsTarget(null);
+            window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
+            toast.push({ type: "success", message: "Savings target updated." });
+        } catch {
+            toast.push({ type: "error", message: "Could not update that savings target." });
+        }
     }
 
     const totalSaved = savingsTargets.reduce((sum, target) => sum + getSavedAmount(target), 0);
     const totalSavingsTarget = savingsTargets.reduce((sum, target) => sum + target.targetAmount, 0);
+    const savingsTotalPages = Math.max(1, Math.ceil(savingsTargets.length / SAVINGS_TARGETS_PER_PAGE));
+    const paginatedSavingsTargets = savingsTargets.slice((savingsPage - 1) * SAVINGS_TARGETS_PER_PAGE, savingsPage * SAVINGS_TARGETS_PER_PAGE);
+
+    useEffect(() => {
+        setSavingsPage((page) => Math.min(page, savingsTotalPages));
+    }, [savingsTotalPages]);
 
     return (
         <Layout>
@@ -321,7 +352,7 @@ export default function ExpenseTracker() {
                             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                                 <div>
                                     <h1 className="text-3xl font-bold uppercase md:text-5xl">Savings</h1>
-                                    <p className="mt-2 text-lg md:text-2xl">Set targets, pay yourself first, and withdraw when life asks nicely.</p>
+                                    <p className="mt-2 text-lg md:text-2xl">Save for a rainy day, and withdraw when it starts pouring!</p>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3 text-center">
                                     <div className="rounded-xl border border-claret/20 px-4 py-3">
@@ -336,13 +367,13 @@ export default function ExpenseTracker() {
                             </div>
                         </div>
 
-                        <section className="grid gap-4 lg:grid-cols-[minmax(280px,360px)_1fr]">
+                        <section className="grid items-start gap-4 lg:grid-cols-[minmax(280px,360px)_1fr]">
                             <form
                                 onSubmit={(event) => {
                                     event.preventDefault();
                                     addSavingsTarget();
                                 }}
-                                className="rounded-2xl bg-pink p-5 text-claret shadow-xl"
+                                className="min-h-[280px] self-start rounded-2xl bg-pink p-5 text-claret shadow-xl"
                             >
                                 <h2 className="text-2xl font-bold uppercase">New Target</h2>
                                 <label className="mt-4 block space-y-1">
@@ -364,7 +395,7 @@ export default function ExpenseTracker() {
                                         <p className="text-xl">No savings targets yet. Give your next big want a name.</p>
                                     </div>
                                 ) : (
-                                    savingsTargets.map((target) => {
+                                    paginatedSavingsTargets.map((target) => {
                                         const savedAmount = getSavedAmount(target);
                                         const percent = Math.min(100, Math.round((savedAmount / target.targetAmount) * 100));
                                         return (
@@ -383,9 +414,14 @@ export default function ExpenseTracker() {
                                                 className="cursor-pointer rounded-2xl bg-pink p-5 text-claret shadow-xl transition-all hover:shadow-2xl"
                                             >
                                                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                                    <div>
-                                                        <h3 className="text-2xl font-bold">{target.title}</h3>
-                                                        <p className="mt-1 text-sm uppercase tracking-widest opacity-80">N{savedAmount.toLocaleString()} / N{target.targetAmount.toLocaleString()}</p>
+                                                    <div className="flex justify-between">
+                                                        <div>
+                                                            <h3 className="text-2xl font-bold">{target.title}</h3>
+                                                            <p className="mt-1 text-sm uppercase tracking-widest opacity-80">N{savedAmount.toLocaleString()} / N{target.targetAmount.toLocaleString()}</p>  
+                                                        </div>
+                                                        <button type="button" onClick={(event) => { event.stopPropagation(); setOpenSavingsMenuId((current) => current === target._id ? null : target._id); }} aria-label="Savings target menu" title="Savings target menu" className="inline-flex size-9 items-center justify-center rounded-xl md:hidden hover:bg-claret hover:text-pink">
+                                                            <MoreVertical className="size-4" />
+                                                        </button>
                                                     </div>
                                                     <div className="relative flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
                                                         <input
@@ -395,9 +431,13 @@ export default function ExpenseTracker() {
                                                             className="w-28 rounded-xl border border-claret/30 bg-pink px-3 py-2"
                                                             placeholder="Amount"
                                                         />
-                                                        <button type="button" onClick={() => updateSavings(target._id, "deposit")} className="rounded-xl border border-claret bg-claret px-3 py-2 text-sm uppercase tracking-widest text-pink">Save</button>
-                                                        <button type="button" onClick={() => updateSavings(target._id, "withdraw")} className="rounded-xl border border-claret px-3 py-2 text-sm uppercase tracking-widest hover:bg-claret hover:text-pink">Withdraw</button>
-                                                        <button type="button" onClick={() => setOpenSavingsMenuId((current) => current === target._id ? null : target._id)} aria-label="Savings target menu" title="Savings target menu" className="inline-flex items-center justify-center rounded-xl border border-claret px-3 py-2 hover:bg-claret hover:text-pink">
+                                                        <button type="button" onClick={() => updateSavings(target._id, "deposit")} aria-label="Save toward target" title="Save toward target" className="inline-flex size-10 items-center justify-center rounded-xl border border-claret bg-claret text-pink hover:bg-claret/90">
+                                                            <ArrowDownToLine className="size-4" />
+                                                        </button>
+                                                        <button type="button" onClick={() => updateSavings(target._id, "withdraw")} aria-label="Withdraw from target" title="Withdraw from target" className="inline-flex size-10 items-center justify-center rounded-xl border border-claret hover:bg-claret hover:text-pink">
+                                                            <ArrowUpFromLine className="size-4" />
+                                                        </button>
+                                                        <button type="button" onClick={() => setOpenSavingsMenuId((current) => current === target._id ? null : target._id)} aria-label="Savings target menu" title="Savings target menu" className="hidden size-10 items-center justify-center rounded-xl border border-claret hover:bg-claret hover:text-pink md:inline-flex lg:border-0">
                                                             <MoreVertical className="size-4" />
                                                         </button>
                                                         {openSavingsMenuId === target._id && (
@@ -421,6 +461,13 @@ export default function ExpenseTracker() {
                                         );
                                     })
                                 )}
+                                <PaginationControls
+                                    page={savingsPage}
+                                    totalPages={savingsTotalPages}
+                                    onPageChange={setSavingsPage}
+                                    label="Targets"
+                                    className="text-pink"
+                                />
                             </div>
                         </section>
                     </section>
@@ -430,7 +477,7 @@ export default function ExpenseTracker() {
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between h-full">
                         <div>
                             <h1 className="text-3xl md:text-5xl font-bold uppercase">Expenses</h1>
-                            <p className="mt-2 text-lg md:text-2xl">Hi, money maker! Here's where we do one of your favorite things - plan how to spend money!</p>
+                            <p className="mt-2 text-lg md:text-2xl">Keep track of all your expenses here, baller!</p>
                         </div>
                         <div className="flex gap-3 h-full items-center flex-wrap justify-center md:justify-end">
                             <button
@@ -511,28 +558,14 @@ export default function ExpenseTracker() {
                 </section>
 
                 <RecentExpenses expenses={expenseItems} showActions actionLabel="View all" />
-                {expensesMeta?.total && Math.ceil(expensesMeta.total / (expensesMeta.limit || 6)) > 1 ? (
-                    <div className="mt-4 flex items-center gap-4 justify-center">
-                        <button
-                            type="button"
-                            disabled={expensePage <= 1}
-                            onClick={() => setExpensePage((p) => Math.max(1, p - 1))}
-                            className="rounded-md border px-3 py-2 bg-claret text-pink disabled:opacity-40"
-                            aria-label="Previous page"
-                        >
-                            <ChevronLeft />
-                        </button>
-                        <div className="text-claret">Page {expensePage} / {Math.ceil(expensesMeta.total / (expensesMeta.limit || 6))}</div>
-                        <button
-                            type="button"
-                            disabled={expensePage >= Math.ceil(expensesMeta.total / (expensesMeta.limit || 6))}
-                            onClick={() => setExpensePage((p) => p + 1)}
-                            className="rounded-md border px-3 py-2 bg-claret text-pink disabled:opacity-40"
-                            aria-label="Next page"
-                        >
-                            <ChevronRight />
-                        </button>
-                    </div>
+                {expensesMeta?.total ? (
+                    <PaginationControls
+                        page={expensePage}
+                        totalPages={Math.ceil(expensesMeta.total / (expensesMeta.limit || 6))}
+                        onPageChange={setExpensePage}
+                        label="Expenses"
+                        className="text-pink"
+                    />
                 ) : null}
                     </>
                 )}

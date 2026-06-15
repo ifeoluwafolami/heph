@@ -8,16 +8,27 @@ import { useToast } from "@/components/Toast";
 type Weight = { _id?: string; weightKg: number; entryDate: string; note?: string }
 type EditWeightModalProps = { open: boolean; onClose: () => void; weight: Weight | null }
 
+function toDateInputValue(value?: string) {
+  if (!value) return ""
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
 export default function EditWeightModal({ open, onClose, weight }: EditWeightModalProps) {
   const [weightKg, setWeightKg] = useState<string>(String(weight?.weightKg ?? ""))
-  const [entryDate, setEntryDate] = useState(weight?.entryDate ?? "")
+  const [entryDate, setEntryDate] = useState(toDateInputValue(weight?.entryDate))
   const [note, setNote] = useState(weight?.note ?? "")
   const toast = useToast()
 
   useEffect(() => {
     if (!weight) return
     setWeightKg(String(weight.weightKg ?? ""))
-    setEntryDate(weight.entryDate ?? "")
+    setEntryDate(toDateInputValue(weight.entryDate))
     setNote(weight.note ?? "")
   }, [weight])
 

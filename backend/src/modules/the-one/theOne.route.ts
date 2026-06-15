@@ -15,6 +15,18 @@ router.get('/', async (req, res) => {
   res.json({ success: true, data: items })
 })
 
+router.get('/:id', async (req, res) => {
+  const userId = req.auth?.userId
+  if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_ERROR' } })
+
+  const id = req.params.id
+  if (!Types.ObjectId.isValid(id)) return res.status(400).json({ success: false, error: { code: 'INVALID_ID' } })
+
+  const item = await TheOneItem.findOne({ _id: id, userId: new Types.ObjectId(userId) }).lean()
+  if (!item) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND' } })
+  res.json({ success: true, data: item })
+})
+
 router.post('/', async (req, res) => {
   const userId = req.auth?.userId
   if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_ERROR' } })
@@ -29,6 +41,25 @@ router.post('/', async (req, res) => {
   })
   await item.save()
   res.status(201).json({ success: true, data: item })
+})
+
+router.patch('/:id', async (req, res) => {
+  const userId = req.auth?.userId
+  if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_ERROR' } })
+
+  const id = req.params.id
+  if (!Types.ObjectId.isValid(id)) return res.status(400).json({ success: false, error: { code: 'INVALID_ID' } })
+
+  const title = String(req.body?.title || '').trim()
+  if (!title) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'title is required' } })
+
+  const item = await TheOneItem.findOneAndUpdate(
+    { _id: id, userId: new Types.ObjectId(userId) },
+    { title, note: String(req.body?.note || '').trim() },
+    { new: true }
+  ).lean()
+  if (!item) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND' } })
+  res.json({ success: true, data: item })
 })
 
 router.delete('/:id', async (req, res) => {

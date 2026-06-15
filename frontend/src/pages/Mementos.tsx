@@ -1,6 +1,7 @@
 import Layout from "@/components/Layout";
 import { ModalBody, ModalFooter, ModalFrame, ModalHead } from "@/components/Modal";
-import { Pencil, Plus, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import PaginationControls from "@/components/PaginationControls";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/components/Toast";
 import { getMementos } from "@/lib/api";
@@ -23,7 +24,7 @@ export default function Mementos() {
   const [isNewMementoOpen, setIsNewMementoOpen] = useState(false)
   const [mementos, setMementos] = useState<Memento[]>([])
   const [page, setPage] = useState(1)
-  const [limit] = useState(12)
+  const [limit] = useState(6)
   const [meta, setMeta] = useState<{ total: number; page: number; limit: number } | null>(null)
   const toast = useToast()
 
@@ -70,31 +71,7 @@ export default function Mementos() {
           </div>
         </div>
 
-        {meta && Math.max(1, Math.ceil(meta.total / meta.limit)) > 1 ? (
-          <div className="mt-6 flex items-center justify-center gap-4">
-            <button
-              type="button"
-              disabled={meta.page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="rounded-md border px-3 py-2 bg-claret text-pink"
-              aria-label="Previous page"
-            >
-              <ChevronLeft />
-            </button>
-            <div className="text-claret">Page {meta.page} / {Math.max(1, Math.ceil(meta.total / meta.limit))}</div>
-            <button
-              type="button"
-              disabled={meta.page >= Math.ceil(meta.total / meta.limit)}
-              onClick={() => setPage((p) => p + 1)}
-              className="rounded-md border px-3 py-2 bg-claret text-pink"
-              aria-label="Next page"
-            >
-              <ChevronRight />
-            </button>
-          </div>
-        ) : null}
-
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {mementos.map((memento) => (
             <article
               key={memento._id}
@@ -144,6 +121,16 @@ export default function Mementos() {
             </article>
           ))}
         </div>
+
+        {meta && (
+          <PaginationControls
+            page={meta.page}
+            totalPages={Math.max(1, Math.ceil(meta.total / meta.limit))}
+            onPageChange={setPage}
+            label="Mementos"
+            className="mt-6"
+          />
+        )}
 
         {selectedMemento ? (
           <ModalFrame onClose={() => setSelectedMemento(null)}>

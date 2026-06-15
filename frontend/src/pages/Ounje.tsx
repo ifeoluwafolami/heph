@@ -1,6 +1,7 @@
 import Layout from "@/components/Layout";
 import { ModalBody, ModalFooter, ModalFrame, ModalHead } from "@/components/Modal";
-import { Pencil, Plus, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import PaginationControls from "@/components/PaginationControls";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import DeleteConfirmationModal from "@/modals/DeleteConfirmationModal";
 import { useState, useEffect } from "react";
 import { useToast } from "@/components/Toast";
@@ -137,29 +138,15 @@ export default function Ounje() {
           ))}
         </div>
 
-        {recipesMeta && Math.max(1, Math.ceil(recipesMeta.total / recipesMeta.limit)) > 1 ? (
-          <div className="mt-4 flex items-center justify-center gap-4">
-            <button
-              type="button"
-              disabled={recipesMeta.page <= 1}
-              onClick={() => setRecipesPage((p) => Math.max(1, p - 1))}
-              className="rounded-md border px-3 py-2 bg-claret text-pink"
-              aria-label="Previous recipes page"
-            >
-              <ChevronLeft />
-            </button>
-            <div className="text-claret">Page {recipesMeta.page} / {Math.max(1, Math.ceil(recipesMeta.total / recipesMeta.limit))}</div>
-            <button
-              type="button"
-              disabled={recipesMeta.page >= Math.ceil(recipesMeta.total / recipesMeta.limit)}
-              onClick={() => setRecipesPage((p) => p + 1)}
-              className="rounded-md border px-3 py-2 bg-claret text-pink"
-              aria-label="Next recipes page"
-            >
-              <ChevronRight />
-            </button>
-          </div>
-        ) : null}
+        {recipesMeta && (
+          <PaginationControls
+            page={recipesMeta.page}
+            totalPages={Math.max(1, Math.ceil(recipesMeta.total / recipesMeta.limit))}
+            onPageChange={setRecipesPage}
+            label="Recipes"
+            className="text-pink"
+          />
+        )}
 
         <section className="my-6 rounded-2xl bg-pink text-claret p-6 md:p-8 w-full shadow-xl border border-claret/20">
           <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -223,29 +210,15 @@ export default function Ounje() {
           </div>
         </section>
 
-        {weightsMeta && Math.max(1, Math.ceil(weightsMeta.total / weightsMeta.limit)) > 1 ? (
-          <div className="mt-4 flex items-center justify-center gap-4">
-            <button
-              type="button"
-              disabled={weightsMeta.page <= 1}
-              onClick={() => setWeightsPage((p) => Math.max(1, p - 1))}
-              className="rounded-md border px-3 py-2 bg-claret text-pink"
-              aria-label="Previous weights page"
-            >
-              <ChevronLeft />
-            </button>
-            <div className="text-claret">Page {weightsMeta.page} / {Math.max(1, Math.ceil(weightsMeta.total / weightsMeta.limit))}</div>
-            <button
-              type="button"
-              disabled={weightsMeta.page >= Math.ceil(weightsMeta.total / weightsMeta.limit)}
-              onClick={() => setWeightsPage((p) => p + 1)}
-              className="rounded-md border px-3 py-2 bg-claret text-pink"
-              aria-label="Next weights page"
-            >
-              <ChevronRight />
-            </button>
-          </div>
-        ) : null}
+        {weightsMeta && (
+          <PaginationControls
+            page={weightsMeta.page}
+            totalPages={Math.max(1, Math.ceil(weightsMeta.total / weightsMeta.limit))}
+            onPageChange={setWeightsPage}
+            label="Weights"
+            className="text-pink"
+          />
+        )}
 
         {selectedRecipe ? (
           <ModalFrame onClose={() => setSelectedRecipe(null)}>
@@ -369,6 +342,7 @@ export default function Ounje() {
               <div className="flex w-full justify-center gap-4 px-4">
                 <button
                   type="button"
+                  onClick={() => { setSelectedWeightForEdit(selectedWeightEntry); setSelectedWeightEntry(null) }}
                   aria-label={`Edit weight entry for ${selectedWeightEntry.entryDate}`}
                   title={`Edit weight entry for ${selectedWeightEntry.entryDate}`}
                   className="inline-flex items-center gap-1.5 justify-center rounded-2xl border border-claret bg-claret px-12 py-3 text-sm md:text-base uppercase tracking-widest text-pink hover:bg-claret/90 transition-all focus:outline-none focus:ring-2 focus:ring-claret focus:ring-offset-2 focus:ring-offset-pink"
@@ -378,6 +352,7 @@ export default function Ounje() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => { setSelectedWeightForDelete(selectedWeightEntry); setSelectedWeightEntry(null) }}
                   aria-label={`Delete weight entry for ${selectedWeightEntry.entryDate}`}
                   title={`Delete weight entry for ${selectedWeightEntry.entryDate}`}
                   className="inline-flex items-center gap-1.5 justify-center rounded-2xl border border-claret bg-pink px-12 py-3 text-sm md:text-base uppercase tracking-widest text-claret hover:bg-claret/80 hover:text-pink transition-all focus:outline-none focus:ring-2 focus:ring-claret focus:ring-offset-2 focus:ring-offset-pink"

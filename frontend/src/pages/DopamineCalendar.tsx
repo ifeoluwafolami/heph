@@ -1,5 +1,7 @@
 import Layout from "@/components/Layout";
 import { ModalBody, ModalFooter, ModalFrame, ModalHead } from "@/components/Modal";
+import PaginationControls from "@/components/PaginationControls";
+import { useToast } from "@/components/Toast";
 import {
   createHabit,
   deleteHabit as deleteHabitApi,
@@ -10,7 +12,7 @@ import {
   type HabitFrequency,
 } from "@/lib/api";
 import DeleteConfirmationModal from "@/modals/DeleteConfirmationModal";
-import { CalendarCheck, Check, Filter, Pencil, Plus, Save, Target, Trash2 } from "lucide-react";
+import { CalendarCheck, Check, Pencil, Plus, Save, Target, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 type HabitFilter = "all" | HabitFrequency;
@@ -26,6 +28,7 @@ type Habit = HabitDto;
 
 const STORAGE_KEY = "heph_dopamine_calendar";
 const MIGRATION_KEY = "heph_dopamine_calendar_server_migrated";
+const HABITS_PER_PAGE = 5;
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -66,6 +69,10 @@ function getWeekEndLabel(dateKey: string) {
 
 function getMonthKey(dateKey: string) {
   return dateKey.slice(0, 7);
+}
+
+function monthToDateKey(month: string) {
+  return `${month}-01`;
 }
 
 function getDaysInMonth(dateKey: string) {
@@ -151,6 +158,7 @@ function announceHabitChange() {
 }
 
 export default function DopamineCalendar() {
+  const toast = useToast();
   const [habits, setHabits] = useState<Habit[]>(loadCachedHabits);
   const [title, setTitle] = useState("");
   const [frequency, setFrequency] = useState<HabitFrequency>("daily");
@@ -164,6 +172,7 @@ export default function DopamineCalendar() {
   const [editTarget, setEditTarget] = useState(1);
   const [deletingHabit, setDeletingHabit] = useState<Habit | null>(null);
   const [syncError, setSyncError] = useState("");
+  const [habitsPage, setHabitsPage] = useState(1);
 
   useEffect(() => {
     let mounted = true;
@@ -237,6 +246,20 @@ export default function DopamineCalendar() {
     return date.toLocaleDateString("en-NG", { month: "long", year: "numeric" });
   }, [progressView, selectedDate]);
 
+  const habitsTotalPages = Math.max(1, Math.ceil(filteredHabits.length / HABITS_PER_PAGE));
+  const paginatedHabits = useMemo(
+    () => filteredHabits.slice((habitsPage - 1) * HABITS_PER_PAGE, habitsPage * HABITS_PER_PAGE),
+    [filteredHabits, habitsPage]
+  );
+
+  useEffect(() => {
+    setHabitsPage(1);
+  }, [filter, progressView, selectedDate]);
+
+  useEffect(() => {
+    setHabitsPage((page) => Math.min(page, habitsTotalPages));
+  }, [habitsTotalPages]);
+
   const monthlyOverview = useMemo(() => {
     const progress = filteredHabits.map((habit) => getHabitProgress(habit, selectedDate, "monthly"));
     const done = progress.reduce((sum, item) => sum + item.done, 0);
@@ -276,8 +299,10 @@ export default function DopamineCalendar() {
       resetNewHabitForm();
       setSyncError("");
       announceHabitChange();
+      toast.push({ type: "success", message: "Habit added." });
     } catch {
       setSyncError("Could not save that habit to your account. Please try again.");
+      toast.push({ type: "error", message: "Could not save that habit." });
     }
   }
 
@@ -306,14 +331,17 @@ export default function DopamineCalendar() {
       setEditingHabit(null);
       setSyncError("");
       announceHabitChange();
+      toast.push({ type: "success", message: "Habit updated." });
     } catch {
       setSyncError("Could not update that habit. Please try again.");
+      toast.push({ type: "error", message: "Could not update that habit." });
     }
   }
 
   async function toggleLog(habitId: string) {
     try {
       const updated = await toggleHabitLog(habitId, selectedDate);
+      const checkedIn = updated.logs.includes(selectedDate);
       setHabits((prev) => {
         const nextHabits = prev.map((habit) => (habit._id === habitId ? updated : habit));
         cacheHabits(nextHabits);
@@ -321,8 +349,10 @@ export default function DopamineCalendar() {
       });
       setSyncError("");
       announceHabitChange();
+      toast.push({ type: "success", message: checkedIn ? "Habit checked in." : "Check-in removed." });
     } catch {
       setSyncError("Could not update that check-in. Please try again.");
+      toast.push({ type: "error", message: "Could not update that check-in." });
     }
   }
 
@@ -338,8 +368,10 @@ export default function DopamineCalendar() {
       setDeletingHabit(null);
       setSyncError("");
       announceHabitChange();
+      toast.push({ type: "success", message: "Habit deleted." });
     } catch {
       setSyncError("Could not delete that habit. Please try again.");
+      toast.push({ type: "error", message: "Could not delete that habit." });
     }
   }
 
@@ -350,7 +382,7 @@ export default function DopamineCalendar() {
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="text-3xl font-bold uppercase md:text-5xl">Dopamine Calendar</h1>
-              <p className="mt-2 text-lg md:text-2xl">Track tiny promises, stack wins, and keep the streaks honest.</p>
+              <p className="mt-2 text-lg md:text-2xl">Keep streaks with me?</p>
             </div>
             <label className="block space-y-1">
               <span className="text-sm uppercase tracking-widest">Tracking Date</span>
@@ -358,6 +390,15 @@ export default function DopamineCalendar() {
                 type="date"
                 value={selectedDate}
                 onChange={(event) => setSelectedDate(event.target.value)}
+                className="w-full rounded-xl border border-claret/30 bg-pink px-3 py-2"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-sm uppercase tracking-widest">Review Month</span>
+              <input
+                type="month"
+                value={getMonthKey(selectedDate)}
+                onChange={(event) => setSelectedDate(monthToDateKey(event.target.value))}
                 className="w-full rounded-xl border border-claret/30 bg-pink px-3 py-2"
               />
             </label>
@@ -447,12 +488,14 @@ export default function DopamineCalendar() {
                   <option value="weekly">Weekly Habits</option>
                   <option value="monthly">Monthly Habits</option>
                 </select>
-                <button type="button" onClick={() => setProgressView("weekly")} className={`inline-flex items-center gap-2 rounded-xl border border-pink/40 px-3 py-2 text-sm uppercase tracking-widest ${progressView === "weekly" ? "bg-pink text-claret" : ""}`}>
-                  <Filter className="size-4" /> Weekly
-                </button>
-                <button type="button" onClick={() => setProgressView("monthly")} className={`rounded-xl border border-pink/40 px-3 py-2 text-sm uppercase tracking-widest ${progressView === "monthly" ? "bg-pink text-claret" : ""}`}>
-                  Monthly
-                </button>
+                <div className="inline-flex overflow-hidden rounded-xl border border-pink/40">
+                  <button type="button" onClick={() => setProgressView("weekly")} className={`inline-flex items-center gap-2 px-3 py-2 text-sm uppercase tracking-widest ${progressView === "weekly" ? "bg-pink text-claret" : "hover:bg-pink/10"}`}>
+                    Weekly
+                  </button>
+                  <button type="button" onClick={() => setProgressView("monthly")} className={`border-l border-pink/40 px-3 py-2 text-sm uppercase tracking-widest ${progressView === "monthly" ? "bg-pink text-claret" : "hover:bg-pink/10"}`}>
+                    Monthly
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -461,7 +504,7 @@ export default function DopamineCalendar() {
                 <p className="text-xl">No habits here yet. Add one or change the filter.</p>
               </div>
             ) : (
-              filteredHabits.map((habit) => {
+              paginatedHabits.map((habit) => {
                 const progress = getHabitProgress(habit, selectedDate, progressView);
                 const doneToday = habit.logs.includes(selectedDate);
                 return (
@@ -511,6 +554,12 @@ export default function DopamineCalendar() {
                 );
               })
             )}
+            <PaginationControls
+              page={habitsPage}
+              totalPages={habitsTotalPages}
+              onPageChange={setHabitsPage}
+              label="Habits"
+            />
           </div>
         </section>
       </section>

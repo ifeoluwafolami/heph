@@ -1,6 +1,7 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/components/Toast";
+import PaginationControls from "@/components/PaginationControls";
 import DeleteConfirmationModal from "@/modals/DeleteConfirmationModal";
 import EditBudgetModal from "@/modals/EditBudgetModal";
 import LogExpenseModal from "@/modals/LogExpenseModal";
@@ -27,13 +28,18 @@ const defaultCategories: BudgetCategory[] = [
   { name: "Dining Out", spent: 220, budget: 200, spentAmount: 220, monthlyBudget: 200 },
   { name: "Health & Fitness", spent: 45, budget: 150, spentAmount: 45, monthlyBudget: 150 },
 ];
+const CATEGORIES_PER_PAGE = 6;
 
 export default function BudgetCategories({ categories = defaultCategories }: BudgetCategoriesProps) {
   const [isNewBudgetOpen, setIsNewBudgetOpen] = useState(false);
   const [selectedEditCategory, setSelectedEditCategory] = useState<BudgetCategory | null>(null);
   const [selectedDeleteCategory, setSelectedDeleteCategory] = useState<BudgetCategory | null>(null);
   const [selectedLogCategory, setSelectedLogCategory] = useState<BudgetCategory | null>(null);
+  const [page, setPage] = useState(1);
   const toast = useToast()
+  const totalPages = Math.max(1, Math.ceil(categories.length / CATEGORIES_PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  const paginatedCategories = categories.slice((safePage - 1) * CATEGORIES_PER_PAGE, safePage * CATEGORIES_PER_PAGE);
 
   return (
     <>
@@ -50,7 +56,7 @@ export default function BudgetCategories({ categories = defaultCategories }: Bud
         </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {categories.map((category) => {
+        {paginatedCategories.map((category) => {
           // support backend BudgetDto shape: { name, monthlyBudget, spentAmount }
           const name = (category.name ?? category.name) as string
           const spent = Number(category.spentAmount ?? category.spent ?? 0)
@@ -128,6 +134,12 @@ export default function BudgetCategories({ categories = defaultCategories }: Bud
           );
         })}
         </div>
+        <PaginationControls
+          page={safePage}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          label="Categories"
+        />
       </section>
 
       <NewBudgetModal open={isNewBudgetOpen} onClose={() => setIsNewBudgetOpen(false)} />

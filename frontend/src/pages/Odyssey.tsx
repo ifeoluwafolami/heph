@@ -1,4 +1,6 @@
 import Layout from "@/components/Layout";
+import PaginationControls from "@/components/PaginationControls";
+import { useToast } from "@/components/Toast";
 import { useState, useEffect, useCallback } from "react";
 import { getSidequests, deleteSidequest, updateSidequest } from "@/lib/api";
 import NewSidequestModal from "@/modals/NewSidequestModal";
@@ -8,6 +10,7 @@ import { Edit2, Trash2, Shuffle, CheckCircle2, Circle } from "lucide-react";
 import type { SidequestDto } from "@/lib/api";
 
 type UiMilestone = { id: string; title: string; done: boolean; cost?: number }
+const SIDEQUESTS_PER_GROUP_PAGE = 5;
 
 function normalizeMilestones(raw: unknown): UiMilestone[] {
   if (!Array.isArray(raw)) return []
@@ -51,6 +54,7 @@ function getSidequestStatus(sq: SidequestDto): 'Queued' | 'Ongoing' | 'Completed
 }
 
 export default function Odyssey() {
+  const toast = useToast()
   const [allSidequests, setAllSidequests] = useState<SidequestDto[]>([])
   const [isNewOpen, setIsNewOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -60,6 +64,7 @@ export default function Odyssey() {
   const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false)
   const [randomSidequest, setRandomSidequest] = useState<SidequestDto | null>(null)
   const [isRandomOpen, setIsRandomOpen] = useState(false)
+  const [groupPages, setGroupPages] = useState<Record<string, number>>({})
 
   const loadAll = useCallback(async () => {
     try {
@@ -109,8 +114,10 @@ export default function Odyssey() {
         await updateSidequest(sq._id, { completed: targetCompleted })
       }
       window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'sidequest' } }))
+      toast.push({ type: 'success', message: targetCompleted ? 'Sidequest completed' : 'Sidequest reopened' })
     } catch (err) {
       console.error(err)
+      toast.push({ type: 'error', message: 'Failed to update sidequest' })
     }
   }
 
@@ -131,9 +138,11 @@ export default function Odyssey() {
       const next = normalizeMilestones((optimisticSq as any).milestones)
       await updateSidequest(sq._id, { milestones: next })
       window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'sidequest' } }))
+      toast.push({ type: 'success', message: 'Milestone updated' })
     } catch (err) {
       setAllSidequests(previous)
       console.error(err)
+      toast.push({ type: 'error', message: 'Failed to update milestone' })
     }
   }
 
@@ -172,12 +181,21 @@ export default function Odyssey() {
     try {
       await deleteSidequest(selectedSidequest._id)
       window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'sidequest' } }))
+      setIsDeleteOpen(false)
+      setSelectedSidequest(null)
+      toast.push({ type: 'success', message: 'Sidequest deleted' })
     } catch (err) {
       console.error(err)
+      toast.push({ type: 'error', message: 'Failed to delete sidequest' })
     }
   }
 
   function renderGroup(title: string, items: SidequestDto[]) {
+    const page = groupPages[title] || 1
+    const totalPages = Math.max(1, Math.ceil(items.length / SIDEQUESTS_PER_GROUP_PAGE))
+    const safePage = Math.min(page, totalPages)
+    const paginatedItems = items.slice((safePage - 1) * SIDEQUESTS_PER_GROUP_PAGE, safePage * SIDEQUESTS_PER_GROUP_PAGE)
+
     return (
       <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">
@@ -188,7 +206,7 @@ export default function Odyssey() {
           <div className="rounded-2xl border border-pink/20 bg-claret/30 p-4 text-pink/70">No sidequests here yet.</div>
         ) : (
           <div className="grid gap-4">
-            {items.map((sq) => {
+            {paginatedItems.map((sq) => {
               const progress = getMilestoneProgress(sq)
               const milestones = normalizeMilestones((sq as any).milestones)
               return (
@@ -293,6 +311,13 @@ export default function Odyssey() {
                 </div>
               )
             })}
+            <PaginationControls
+              page={safePage}
+              totalPages={totalPages}
+              onPageChange={(nextPage) => setGroupPages((prev) => ({ ...prev, [title]: nextPage }))}
+              label={title}
+              className="text-pink"
+            />
           </div>
         )}
       </section>

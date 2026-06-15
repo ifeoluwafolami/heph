@@ -191,9 +191,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error('Session expired. Please log in again.')
   }
 
-  const json = (await res.json()) as ApiResponse<T> & { meta?: unknown }
+  const raw = await res.text()
+  let json: ApiResponse<T> & { meta?: unknown }
+  try {
+    json = raw ? JSON.parse(raw) as ApiResponse<T> & { meta?: unknown } : { success: true, data: undefined as T }
+  } catch {
+    throw new Error(`HTTP ${res.status}`)
+  }
+
   if (!res.ok || !json.success) {
-    throw new Error(!json.success ? json.error.message || json.error.code : `HTTP ${res.status}`)
+    const message = !json.success ? json.error.message || json.error.code : `HTTP ${res.status}`
+    throw new Error(`${message} (HTTP ${res.status})`)
   }
 
   // attach meta if present to returned data under _meta for callers that need pagination metadata
@@ -350,6 +358,13 @@ export async function getTheOneItems() {
 export async function createTheOneItem(payload: { title: string; note?: string }) {
   return request<TheOneItemDto>('/the-one', {
     method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateTheOneItem(id: string, payload: { title: string; note?: string }) {
+  return request<TheOneItemDto>(`/the-one/${id}`, {
+    method: 'PATCH',
     body: JSON.stringify(payload),
   })
 }
