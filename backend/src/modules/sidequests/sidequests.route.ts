@@ -11,9 +11,12 @@ type MilestoneInput = {
   id?: string
   title?: string
   done?: boolean
+  cost?: number
 }
 
-function sanitizeMilestones(input: unknown): Array<{ id: string; title: string; done: boolean }> {
+type SanitizedMilestone = { id: string; title: string; done: boolean; cost?: number }
+
+function sanitizeMilestones(input: unknown): SanitizedMilestone[] {
   if (!Array.isArray(input)) return []
   return input
     .map((m, index) => {
@@ -22,9 +25,18 @@ function sanitizeMilestones(input: unknown): Array<{ id: string; title: string; 
       if (!title) return null
       const id = String(item?.id || `ms-${Date.now()}-${index}`)
       const done = Boolean(item?.done)
-      return { id, title, done }
+      const cost = item?.cost === undefined ? undefined : Math.max(0, Number(item.cost) || 0)
+      return cost === undefined ? { id, title, done } : { id, title, done, cost }
     })
-    .filter((m): m is { id: string; title: string; done: boolean } => Boolean(m))
+    .filter((m): m is SanitizedMilestone => Boolean(m))
+}
+
+function hasMilestoneCosts(milestones: SanitizedMilestone[]) {
+  return milestones.some((m) => m.cost !== undefined)
+}
+
+function getMilestoneCostTotal(milestones: SanitizedMilestone[]) {
+  return milestones.reduce((sum, milestone) => sum + (milestone.cost || 0), 0)
 }
 
 // GET /sidequests?limit=&page=
@@ -66,12 +78,13 @@ router.post('/', async (req, res) => {
       normalizedMilestones = normalizedMilestones.map((m) => ({ ...m, done: Boolean(completed) }))
     }
     const resolvedCompleted = normalizedMilestones.length > 0 ? normalizedMilestones.every((m) => m.done) : Boolean(completed)
+    const resolvedCost = hasMilestoneCosts(normalizedMilestones) ? getMilestoneCostTotal(normalizedMilestones) : cost
 
     const sidequest = await Sidequest.create({
       userId: new Types.ObjectId(userId),
       title,
       description,
-      cost,
+      cost: resolvedCost,
       completed: resolvedCompleted,
       milestones: normalizedMilestones,
     })
@@ -128,7 +141,7 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ success: false, error: { code: 'NOT_FOUND' } })
     }
 
-    let nextMilestones = sidequest.milestones as Array<{ id: string; title: string; done: boolean }>
+    let nextMilestones = sidequest.milestones as SanitizedMilestone[]
     if (milestones !== undefined) {
       nextMilestones = sanitizeMilestones(milestones)
     }
@@ -141,7 +154,11 @@ router.put('/:id', async (req, res) => {
 
     if (title) sidequest.title = title
     if (description) sidequest.description = description
-    if (cost !== undefined) sidequest.cost = cost
+    if (nextMilestones.length > 0 && hasMilestoneCosts(nextMilestones)) {
+      sidequest.cost = getMilestoneCostTotal(nextMilestones)
+    } else if (cost !== undefined) {
+      sidequest.cost = cost
+    }
     sidequest.milestones = nextMilestones as any
     sidequest.completed = Boolean(resolvedCompleted)
 

@@ -8,6 +8,22 @@ const router = Router()
 
 router.use(requireAuth)
 
+function getLagosMonthRange(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-NG', {
+    timeZone: 'Africa/Lagos',
+    year: 'numeric',
+    month: 'numeric',
+  }).formatToParts(date)
+
+  const year = Number(parts.find((part) => part.type === 'year')?.value)
+  const month = Number(parts.find((part) => part.type === 'month')?.value) - 1
+
+  return {
+    first: new Date(Date.UTC(year, month, 1) - 60 * 60 * 1000),
+    next: new Date(Date.UTC(year, month + 1, 1) - 60 * 60 * 1000),
+  }
+}
+
 // GET /expenses?limit=&page=&from=&to=&categoryId=
 router.get('/', async (req, res) => {
   const userId = req.auth?.userId
@@ -35,13 +51,10 @@ router.get('/summary', async (req, res) => {
   const userId = req.auth?.userId
   if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_ERROR' } })
 
-  // summary for current month if not provided
-  const now = new Date()
-  const first = new Date(now.getFullYear(), now.getMonth(), 1)
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+  const { first, next } = getLagosMonthRange()
 
   const agg = await Expense.aggregate([
-    { $match: { userId: new Types.ObjectId(userId), expenseDate: { $gte: first, $lte: last } } },
+    { $match: { userId: new Types.ObjectId(userId), expenseDate: { $gte: first, $lt: next } } },
     { $group: { _id: null, totalSpent: { $sum: '$amount' }, count: { $sum: 1 } } },
   ])
 

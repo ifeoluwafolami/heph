@@ -1,12 +1,14 @@
-import React, { useEffect, useRef, type ReactNode } from "react";
+import React, { useCallback, useEffect, useRef, type ReactNode } from "react";
 import ReactDOM from "react-dom";
 import { getFocusableElements, nextFocus, usePortal } from "./HelperFunctions";
 
 interface FrameProps {
   closeOnClickOutside?: boolean;
   closeOnEsc?: boolean;
+  confirmCloseMessage?: string;
   onClose: () => void;
   open?: boolean;
+  shouldConfirmClose?: () => boolean;
   children: ReactNode;
 }
 
@@ -14,8 +16,10 @@ export const ModalFrame: React.FC<FrameProps> = ({
   children,
   closeOnClickOutside = true,
   closeOnEsc = true,
+  confirmCloseMessage = "You have unsaved changes. Close anyway?",
   onClose,
   open = true,
+  shouldConfirmClose,
 }) => {
   const portal = usePortal();
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -23,9 +27,27 @@ export const ModalFrame: React.FC<FrameProps> = ({
 
   const container = useRef<HTMLDivElement | null>(null);
 
+  const requestClose = useCallback(() => {
+    const hasFilledFormFields = () => {
+      const fields = Array.from(container.current?.querySelectorAll("input, textarea, select") || []);
+      return fields.some((field) => {
+        if (field instanceof HTMLInputElement) {
+          if (["checkbox", "radio"].includes(field.type)) return field.checked;
+          return field.value.trim().length > 0;
+        }
+        if (field instanceof HTMLTextAreaElement) return field.value.trim().length > 0;
+        if (field instanceof HTMLSelectElement) return field.value.trim().length > 0;
+        return false;
+      });
+    };
+    const shouldConfirm = shouldConfirmClose ? shouldConfirmClose() : hasFilledFormFields();
+    if (shouldConfirm && !window.confirm(confirmCloseMessage)) return;
+    onClose();
+  }, [confirmCloseMessage, onClose, shouldConfirmClose]);
+
   // Close on click outside
   const onOverlayClick = (e: React.MouseEvent) => {
-    if (!container.current?.contains(e.target as Node)) onClose();
+    if (!container.current?.contains(e.target as Node)) requestClose();
   };
 
   // ESC + Tab key handling
@@ -35,7 +57,7 @@ export const ModalFrame: React.FC<FrameProps> = ({
 
       switch (e.key) {
         case "Escape":
-          if (closeOnEsc) onClose();
+          if (closeOnEsc) requestClose();
           break;
         case "Tab":
           e.preventDefault();
@@ -46,7 +68,7 @@ export const ModalFrame: React.FC<FrameProps> = ({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closeOnEsc, onClose, open]);
+  }, [closeOnEsc, open, requestClose]);
 
   // Scroll + focus lock
   useEffect(() => {
@@ -84,7 +106,7 @@ export const ModalFrame: React.FC<FrameProps> = ({
       >
         {/* Close Button */}
         <button
-          onClick={onClose}
+          onClick={requestClose}
           aria-label="Close modal"
           className="absolute top-2 right-2 inline-flex size-10 items-center justify-center text-4xl font-bold text-claret hover:text-claret/80"
         >

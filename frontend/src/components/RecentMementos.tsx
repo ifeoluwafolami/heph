@@ -46,7 +46,7 @@ export default function RecentMementos({ mementos = defaultMementos }: RecentMem
             className="rounded-xl border border-claret/30 p-4 bg-claret/95 text-pink"
           >
             <p className="text-lg md:text-xl font-bold">{memento.title}</p>
-            <p className="mt-1 text-sm md:text-base leading-5 md:leading-6 min-h-10 md:min-h-12 opacity-90 line-clamp-2">{memento.preview}</p>
+            <p className="mt-1 text-sm md:text-base leading-5 md:leading-6 min-h-10 md:min-h-12 max-h-24 overflow-hidden opacity-90 whitespace-pre-wrap">{memento.preview}</p>
             <p className="mt-2 text-xs md:text-sm uppercase tracking-wider opacity-75">{memento.date}</p>
           </article>
         ))}

@@ -94,11 +94,11 @@ export default function Mementos() {
           </div>
         ) : null}
 
-        <div className="mt-6 flex flex-wrap gap-4">
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {mementos.map((memento) => (
             <article
               key={memento._id}
-              className="w-full lg:w-[calc((100%-2rem)/4)] cursor-pointer rounded-2xl border border-claret/30 bg-pink text-claret p-6 shadow-xl transition-all hover:shadow-2xl focus-within:ring-2 focus-within:ring-claret focus-within:ring-offset-2 focus-within:ring-offset-pink flex flex-col"
+              className="cursor-pointer rounded-2xl border border-claret/30 bg-pink text-claret p-6 shadow-xl transition-all hover:shadow-2xl focus-within:ring-2 focus-within:ring-claret focus-within:ring-offset-2 focus-within:ring-offset-pink flex flex-col"
               onClick={() => setSelectedMemento(memento)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -135,7 +135,7 @@ export default function Mementos() {
                 </div>
               </div>
 
-              <p className="mt-4 text-lg md:text-xl tracking-normal line-clamp-4">{memento.content}</p>
+              <p className="mt-4 text-lg md:text-xl tracking-normal line-clamp-4 whitespace-pre-wrap">{memento.content.replace(/\\n/g, '\n')}</p>
 
               <div className="flex flex-col gap-1 text-sm md:text-base uppercase tracking-wider opacity-80 pt-6 mt-auto">
                 <p>Created: {new Date(memento.createdAt).toLocaleDateString()}</p>
@@ -147,10 +147,14 @@ export default function Mementos() {
 
         {selectedMemento ? (
           <ModalFrame onClose={() => setSelectedMemento(null)}>
-            <ModalHead>{selectedMemento.title}</ModalHead>
+            <ModalHead>
+              <p className="normal-case">
+                {selectedMemento.title}
+              </p>
+            </ModalHead>
             <ModalBody>
               <div>
-                <p className="mt-2 text-xl md:text-2xl tracking-normal whitespace-pre-wrap">{selectedMemento.content}</p>
+                <p className="mt-2 text-xl md:text-2xl tracking-normal whitespace-pre-wrap">{selectedMemento.content.replace(/\\n/g, '\n')}</p>
               </div>
 
               <div

@@ -7,7 +7,7 @@ import DeleteConfirmationModal from "@/modals/DeleteConfirmationModal";
 import { Edit2, Trash2, Shuffle, CheckCircle2, Circle } from "lucide-react";
 import type { SidequestDto } from "@/lib/api";
 
-type UiMilestone = { id: string; title: string; done: boolean }
+type UiMilestone = { id: string; title: string; done: boolean; cost?: number }
 
 function normalizeMilestones(raw: unknown): UiMilestone[] {
   if (!Array.isArray(raw)) return []
@@ -24,9 +24,16 @@ function normalizeMilestones(raw: unknown): UiMilestone[] {
         id: String(m?.id ?? `ms-${index}-${title}`),
         title,
         done: Boolean(m?.done),
+        cost: m?.cost === undefined ? undefined : Math.max(0, Number(m.cost) || 0),
       }
     })
     .filter((m): m is UiMilestone => Boolean(m))
+}
+
+function getDisplayedCost(sq: SidequestDto) {
+  const milestones = normalizeMilestones((sq as any).milestones)
+  const hasMilestoneCosts = milestones.some((m) => m.cost !== undefined)
+  return hasMilestoneCosts ? milestones.reduce((sum, milestone) => sum + (milestone.cost || 0), 0) : sq.cost
 }
 
 function isCompletedSidequest(sq: SidequestDto): boolean {
@@ -218,7 +225,7 @@ export default function Odyssey() {
                         </button>
                         <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
                           <h3 className={`text-lg capitalize md:text-2xl font-bold text-claret ${sq.completed ? 'line-through opacity-60' : ''}`}>{sq.title}</h3>
-                          <p className="text-xs md:text-base font-black bg-claret w-fit p-2 text-pink">COST: {sq.cost}</p>
+                          <p className="text-xs md:text-base font-black bg-claret w-fit p-2 text-pink">COST: {getDisplayedCost(sq)}</p>
                         </div>
                         
                       </div>
@@ -250,6 +257,7 @@ export default function Odyssey() {
                                 >
                                   {m.done ? <CheckCircle2 className="size-4 text-claret" /> : <Circle className="size-4 text-claret/60" />}
                                   <span className={`text-sm text-claret ${m.done ? 'line-through opacity-60' : ''}`}>{m.title}</span>
+                                  {m.cost !== undefined && <span className="text-xs font-bold text-claret/70">N{m.cost.toLocaleString()}</span>}
                                 </button>
                               </li>
                             ))}
@@ -379,7 +387,7 @@ export default function Odyssey() {
               </div>
               <div>
                 <p className="text-sm uppercase tracking-widest text-claret/60">Cost</p>
-                <p className="text-2xl font-bold text-claret mt-2">{viewDetailsSidequest.cost}</p>
+                <p className="text-2xl font-bold text-claret mt-2">{getDisplayedCost(viewDetailsSidequest)}</p>
               </div>
               {normalizeMilestones((viewDetailsSidequest as any).milestones).length > 0 && (
                 <div>
@@ -389,6 +397,7 @@ export default function Odyssey() {
                       <li key={m.id} className="flex items-center gap-2">
                         {m.done ? <CheckCircle2 className="size-4 text-claret" /> : <Circle className="size-4 text-claret/60" />}
                         <span className={`text-claret ${m.done ? 'line-through opacity-60' : ''}`}>{m.title}</span>
+                        {m.cost !== undefined && <span className="ml-auto text-sm font-bold text-claret/70">N{m.cost.toLocaleString()}</span>}
                       </li>
                     ))}
                   </ul>
@@ -421,7 +430,7 @@ export default function Odyssey() {
             <p className="text-sm uppercase tracking-widest text-claret/60 mb-2">Your Quest Awaits</p>
             <h2 className="text-2xl md:text-3xl font-bold text-claret mb-4">{randomSidequest.title}</h2>
             <p className="text-lg text-claret/80 mb-4">{randomSidequest.description}</p>
-            <p className="text-xl font-bold text-claret mb-6">Cost: {randomSidequest.cost}</p>
+            <p className="text-xl font-bold text-claret mb-6">Cost: {getDisplayedCost(randomSidequest)}</p>
             {normalizeMilestones((randomSidequest as any).milestones).length > 0 && (
               <p className="text-sm text-claret/70 mb-6">Milestones left: {normalizeMilestones((randomSidequest as any).milestones).filter((m) => !m.done).length}</p>
             )}

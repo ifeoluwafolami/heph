@@ -5,6 +5,7 @@ const SidequestMilestoneSchema = new Schema(
     id: { type: String, required: true },
     title: { type: String, required: true },
     done: { type: Boolean, default: false },
+    cost: { type: Number, default: undefined },
   },
   { _id: false }
 )

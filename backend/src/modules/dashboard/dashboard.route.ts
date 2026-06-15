@@ -6,33 +6,49 @@ import { BudgetCategory } from '../budgets/budget.model'
 import { Memento } from '../mementos/memento.model'
 import { WeightEntry } from '../weights/weight.model'
 import { Recipe } from '../recipes/recipe.model'
+import { Sidequest } from '../sidequests/sidequest.model'
 
 const router = Router()
 
 router.use(requireAuth)
 
+function getLagosMonthRange(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-NG', {
+    timeZone: 'Africa/Lagos',
+    year: 'numeric',
+    month: 'numeric',
+  }).formatToParts(date)
+
+  const year = Number(parts.find((part) => part.type === 'year')?.value)
+  const month = Number(parts.find((part) => part.type === 'month')?.value) - 1
+
+  return {
+    first: new Date(Date.UTC(year, month, 1) - 60 * 60 * 1000),
+    next: new Date(Date.UTC(year, month + 1, 1) - 60 * 60 * 1000),
+  }
+}
+
 router.get('/overview', async (req, res) => {
   const userId = req.auth?.userId
   if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_ERROR' } })
 
-  const now = new Date()
-  const first = new Date(now.getFullYear(), now.getMonth(), 1)
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+  const { first, next } = getLagosMonthRange()
 
   const userObjectId = new Types.ObjectId(userId)
 
-  const [expenseAgg, budgetAgg, mementosAdded, recipesAdded, latestWeights] = await Promise.all([
+  const [expenseAgg, budgetAgg, totalMementos, totalRecipes, totalSidequests, latestWeights] = await Promise.all([
     Expense.aggregate([
-      { $match: { userId: userObjectId, expenseDate: { $gte: first, $lte: last } } },
+      { $match: { userId: userObjectId, expenseDate: { $gte: first, $lt: next } } },
       { $group: { _id: null, totalSpent: { $sum: '$amount' } } },
     ]),
     BudgetCategory.aggregate([
       { $match: { userId: userObjectId } },
       { $group: { _id: null, totalBudgeted: { $sum: '$monthlyBudget' } } },
     ]),
-    Memento.countDocuments({ userId: userObjectId, createdAt: { $gte: first, $lte: last } }),
-    Recipe.countDocuments({ userId: userObjectId, createdAt: { $gte: first, $lte: last } }),
-    WeightEntry.find({ userId: userObjectId }).sort({ entryDate: -1 }).limit(2).lean(),
+    Memento.countDocuments({ userId: userObjectId }),
+    Recipe.countDocuments({ userId: userObjectId }),
+    Sidequest.countDocuments({ userId: userObjectId }),
+    WeightEntry.find({ userId: userObjectId }).sort({ entryDate: -1, createdAt: -1 }).limit(2).lean(),
   ])
 
   let weightProgressKg = 0
@@ -45,9 +61,11 @@ router.get('/overview', async (req, res) => {
     data: {
       totalSpent: expenseAgg[0]?.totalSpent || 0,
       totalBudgeted: budgetAgg[0]?.totalBudgeted || 0,
-      mementosAdded,
+      mementosAdded: totalMementos,
       weightProgressKg,
-      newRecipes: recipesAdded,
+      newRecipes: totalRecipes,
+      totalRecipes,
+      totalSidequests,
     },
   })
 })

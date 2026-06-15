@@ -66,8 +66,7 @@ export type MementoDto = {
   editedAt?: string | null
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://heph-backend.onrender.com/api/v1'
-// 'http://localhost:4000/api/v1'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api/v1'
 // 'https://heph-backend.onrender.com/api/v1' 
 
 
@@ -173,6 +172,8 @@ export async function getDashboardOverview() {
     mementosAdded: number
     weightProgressKg: number
     newRecipes: number
+    totalRecipes?: number
+    totalSidequests?: number
   }>('/dashboard/overview')
 }
 
@@ -342,7 +343,7 @@ export type SidequestDto = {
   description: string
   cost: number
   completed: boolean
-  milestones?: Array<{ id: string; title: string; done: boolean }>
+  milestones?: Array<{ id: string; title: string; done: boolean; cost?: number }>
   createdAt: string
 }
 
@@ -350,14 +351,14 @@ export async function getSidequests(limit = 20, page = 1) {
   return request<SidequestDto[]>(`/sidequests?limit=${limit}&page=${page}`)
 }
 
-export async function createSidequest(payload: { title: string; description: string; cost: number; milestones?: Array<{ id: string; title: string; done: boolean }> }) {
+export async function createSidequest(payload: { title: string; description: string; cost: number; milestones?: Array<{ id: string; title: string; done: boolean; cost?: number }> }) {
   return request<SidequestDto>('/sidequests', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
 }
 
-export async function updateSidequest(id: string, payload: Partial<{ title: string; description: string; cost: number; completed: boolean; milestones: Array<{ id: string; title: string; done: boolean }> }>) {
+export async function updateSidequest(id: string, payload: Partial<{ title: string; description: string; cost: number; completed: boolean; milestones: Array<{ id: string; title: string; done: boolean; cost?: number }> }>) {
   return request<SidequestDto>(`/sidequests/${id}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
