@@ -3,7 +3,7 @@ import CustomDateInput from "@/components/CustomDateInput";
 import { Plus } from "lucide-react";
 import { useState, useEffect } from "react";
 import SearchableSelect from "@/components/SearchableSelect";
-import { createExpense, getBudgets, createBudget } from "@/lib/api";
+import { createExpense, getBudgets, createBudget, getExpenses } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
 type NewExpenseModalProps = {
@@ -33,11 +33,9 @@ export default function NewExpenseModal({ open, onClose }: NewExpenseModalProps)
         if (!mounted) return
         setCategories(budgets.map(b => b.name))
         setBudgets(budgets.map(b => ({ _id: b._id, name: b.name })))
-        // load saved titles from localStorage
-        const raw = localStorage.getItem('heph_saved_expense_titles')
-        if (raw) {
-          try { setSavedTitles(JSON.parse(raw) as string[]) } catch { /* ignore */ }
-        }
+        const expenses = await getExpenses(50, 1)
+        if (!mounted) return
+        setSavedTitles(Array.from(new Set(expenses.map((expense) => expense.title))).slice(0, 50))
       } catch (_err) {
         // ignore
       }
@@ -74,11 +72,7 @@ export default function NewExpenseModal({ open, onClose }: NewExpenseModalProps)
 
       await createExpense(payload)
 
-      // save title for future suggestions
-      try {
-        const list = Array.from(new Set([title, ...savedTitles])).slice(0, 50)
-        localStorage.setItem('heph_saved_expense_titles', JSON.stringify(list))
-      } catch {}
+      setSavedTitles((prev) => Array.from(new Set([title, ...prev])).slice(0, 50))
       toast.push({ type: 'success', message: 'Expense created' })
       // notify app to refetch lists
       window.dispatchEvent(new CustomEvent('heph:expense:created', { detail: { expense: { title, amount: amt, category: matched?._id ?? null } } }))

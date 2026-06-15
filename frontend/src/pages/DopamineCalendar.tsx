@@ -1,21 +1,31 @@
 import Layout from "@/components/Layout";
 import { ModalBody, ModalFooter, ModalFrame, ModalHead } from "@/components/Modal";
+import {
+  createHabit,
+  deleteHabit as deleteHabitApi,
+  getHabits,
+  toggleHabitLog,
+  updateHabit,
+  type HabitDto,
+  type HabitFrequency,
+} from "@/lib/api";
 import DeleteConfirmationModal from "@/modals/DeleteConfirmationModal";
 import { CalendarCheck, Check, Filter, Pencil, Plus, Save, Target, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-type HabitFrequency = "daily" | "weekly" | "monthly";
 type HabitFilter = "all" | HabitFrequency;
 type ProgressView = "weekly" | "monthly";
-type Habit = {
+type LocalHabit = {
   id: string;
   title: string;
   frequency: HabitFrequency;
   target: number;
   logs: string[];
 };
+type Habit = HabitDto;
 
 const STORAGE_KEY = "heph_dopamine_calendar";
+const MIGRATION_KEY = "heph_dopamine_calendar_server_migrated";
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -105,17 +115,43 @@ function getHabitProgress(habit: Habit, selectedDate: string, view: ProgressView
   };
 }
 
-function loadHabits() {
+function loadCachedHabits(): Habit[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Habit[]) : [];
+    const parsed = raw ? (JSON.parse(raw) as Array<LocalHabit | Habit>) : [];
+    return parsed.map((habit) => ({
+      _id: "_id" in habit ? habit._id : habit.id,
+      title: habit.title,
+      frequency: habit.frequency,
+      target: habit.target,
+      logs: habit.logs || [],
+    }));
   } catch {
     return [];
   }
 }
 
+function cacheHabits(habits: Habit[]) {
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify(
+      habits.map((habit) => ({
+        id: habit._id,
+        title: habit.title,
+        frequency: habit.frequency,
+        target: habit.target,
+        logs: habit.logs,
+      }))
+    )
+  );
+}
+
+function announceHabitChange() {
+  window.dispatchEvent(new CustomEvent("heph:data:changed", { detail: { resource: "habit" } }));
+}
+
 export default function DopamineCalendar() {
-  const [habits, setHabits] = useState<Habit[]>(loadHabits);
+  const [habits, setHabits] = useState<Habit[]>(loadCachedHabits);
   const [title, setTitle] = useState("");
   const [frequency, setFrequency] = useState<HabitFrequency>("daily");
   const [target, setTarget] = useState(1);
@@ -127,10 +163,63 @@ export default function DopamineCalendar() {
   const [editFrequency, setEditFrequency] = useState<HabitFrequency>("daily");
   const [editTarget, setEditTarget] = useState(1);
   const [deletingHabit, setDeletingHabit] = useState<Habit | null>(null);
+  const [syncError, setSyncError] = useState("");
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
-  }, [habits]);
+    let mounted = true;
+
+    async function loadServerHabits() {
+      try {
+        const remoteHabits = await getHabits();
+        if (!mounted) return;
+
+        const cachedHabits = loadCachedHabits();
+        const shouldMigrate = !localStorage.getItem(MIGRATION_KEY) && cachedHabits.length > 0;
+        if (shouldMigrate) {
+          const knownTitles = new Set(remoteHabits.map((habit) => habit.title.trim().toLowerCase()));
+          const migrated = await Promise.all(
+            cachedHabits
+              .filter((habit) => !knownTitles.has(habit.title.trim().toLowerCase()))
+              .map((habit) =>
+                createHabit({
+                  title: habit.title,
+                  frequency: habit.frequency,
+                  target: habit.frequency === "daily" ? 1 : Math.max(1, habit.target),
+                  logs: habit.logs,
+                })
+              )
+          );
+          const nextHabits = [...migrated, ...remoteHabits];
+          if (!mounted) return;
+          setHabits(nextHabits);
+          cacheHabits(nextHabits);
+          localStorage.setItem(MIGRATION_KEY, "true");
+          setSyncError("");
+          return;
+        }
+
+        setHabits(remoteHabits);
+        cacheHabits(remoteHabits);
+        localStorage.setItem(MIGRATION_KEY, "true");
+        setSyncError("");
+      } catch {
+        if (!mounted) return;
+        setSyncError("Could not sync habits yet. Showing the last habits saved on this device.");
+        setHabits(loadCachedHabits());
+      }
+    }
+
+    loadServerHabits();
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail;
+      if (!detail || detail.resource === "habit") loadServerHabits();
+    };
+    window.addEventListener("heph:data:changed", handler as EventListener);
+    return () => {
+      mounted = false;
+      window.removeEventListener("heph:data:changed", handler as EventListener);
+    };
+  }, []);
 
   const filteredHabits = useMemo(
     () => {
@@ -169,20 +258,27 @@ export default function DopamineCalendar() {
     setTarget(1);
   }
 
-  function addHabit() {
+  async function addHabit() {
     const cleanTitle = titleCase(title);
     if (!cleanTitle) return;
-    setHabits((prev) => [
-      {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    try {
+      const created = await createHabit({
         title: cleanTitle,
         frequency,
         target: frequency === "daily" ? 1 : Math.max(1, target),
         logs: [],
-      },
-      ...prev,
-    ]);
-    resetNewHabitForm();
+      });
+      setHabits((prev) => {
+        const nextHabits = [created, ...prev];
+        cacheHabits(nextHabits);
+        return nextHabits;
+      });
+      resetNewHabitForm();
+      setSyncError("");
+      announceHabitChange();
+    } catch {
+      setSyncError("Could not save that habit to your account. Please try again.");
+    }
   }
 
   function openEditHabit(habit: Habit) {
@@ -192,42 +288,59 @@ export default function DopamineCalendar() {
     setEditTarget(habit.target);
   }
 
-  function saveHabitEdit() {
+  async function saveHabitEdit() {
     if (!editingHabit) return;
     const cleanTitle = titleCase(editTitle);
     if (!cleanTitle) return;
-    setHabits((prev) =>
-      prev.map((habit) =>
-        habit.id === editingHabit.id
-          ? {
-              ...habit,
-              title: cleanTitle,
-              frequency: editFrequency,
-              target: editFrequency === "daily" ? 1 : Math.max(1, editTarget),
-            }
-          : habit
-      )
-    );
-    setEditingHabit(null);
+    try {
+      const updated = await updateHabit(editingHabit._id, {
+        title: cleanTitle,
+        frequency: editFrequency,
+        target: editFrequency === "daily" ? 1 : Math.max(1, editTarget),
+      });
+      setHabits((prev) => {
+        const nextHabits = prev.map((habit) => (habit._id === editingHabit._id ? updated : habit));
+        cacheHabits(nextHabits);
+        return nextHabits;
+      });
+      setEditingHabit(null);
+      setSyncError("");
+      announceHabitChange();
+    } catch {
+      setSyncError("Could not update that habit. Please try again.");
+    }
   }
 
-  function toggleLog(habitId: string) {
-    setHabits((prev) =>
-      prev.map((habit) => {
-        if (habit.id !== habitId) return habit;
-        const hasLog = habit.logs.includes(selectedDate);
-        return {
-          ...habit,
-          logs: hasLog ? habit.logs.filter((date) => date !== selectedDate) : [...habit.logs, selectedDate],
-        };
-      })
-    );
+  async function toggleLog(habitId: string) {
+    try {
+      const updated = await toggleHabitLog(habitId, selectedDate);
+      setHabits((prev) => {
+        const nextHabits = prev.map((habit) => (habit._id === habitId ? updated : habit));
+        cacheHabits(nextHabits);
+        return nextHabits;
+      });
+      setSyncError("");
+      announceHabitChange();
+    } catch {
+      setSyncError("Could not update that check-in. Please try again.");
+    }
   }
 
-  function deleteHabit(habitId: string) {
-    setHabits((prev) => prev.filter((habit) => habit.id !== habitId));
-    if (editingHabit?.id === habitId) setEditingHabit(null);
-    setDeletingHabit(null);
+  async function deleteHabit(habitId: string) {
+    try {
+      await deleteHabitApi(habitId);
+      setHabits((prev) => {
+        const nextHabits = prev.filter((habit) => habit._id !== habitId);
+        cacheHabits(nextHabits);
+        return nextHabits;
+      });
+      if (editingHabit?._id === habitId) setEditingHabit(null);
+      setDeletingHabit(null);
+      setSyncError("");
+      announceHabitChange();
+    } catch {
+      setSyncError("Could not delete that habit. Please try again.");
+    }
   }
 
   return (
@@ -284,15 +397,16 @@ export default function DopamineCalendar() {
           </div>
         </section>
 
-        <section className="my-6 grid gap-4 lg:grid-cols-[minmax(280px,360px)_1fr]">
+        <section className="my-6 grid items-start gap-4 lg:grid-cols-[minmax(280px,360px)_1fr]">
           <form
             onSubmit={(event) => {
               event.preventDefault();
               addHabit();
             }}
-            className="rounded-2xl bg-pink p-5 text-claret shadow-xl"
+            className="min-h-[340px] self-start rounded-2xl bg-pink p-5 text-claret shadow-xl"
           >
             <h2 className="text-2xl font-bold uppercase">Add Habit</h2>
+            {syncError && <p className="mt-3 rounded-xl border border-claret/30 p-3 text-sm">{syncError}</p>}
             <label className="mt-4 block space-y-1">
               <span className="text-sm uppercase tracking-widest">Habit</span>
               <input value={title} onChange={(event) => setTitle(event.target.value)} className="w-full rounded-xl border border-claret/30 bg-pink px-3 py-2 capitalize" placeholder="e.g. Read 10 Pages" />
@@ -352,7 +466,7 @@ export default function DopamineCalendar() {
                 const doneToday = habit.logs.includes(selectedDate);
                 return (
                   <article
-                    key={habit.id}
+                    key={habit._id}
                     className="cursor-pointer rounded-2xl bg-pink p-5 text-claret shadow-xl transition-all hover:shadow-2xl focus:outline-none focus:ring-2 focus:ring-claret focus:ring-offset-2 focus:ring-offset-claret"
                     onClick={() => openEditHabit(habit)}
                     onKeyDown={(event) => {
@@ -376,7 +490,7 @@ export default function DopamineCalendar() {
                         </p>
                       </div>
                       <div className="flex gap-2">
-                        <button type="button" onClick={(event) => { event.stopPropagation(); toggleLog(habit.id); }} className={`inline-flex items-center gap-2 rounded-xl border border-claret px-3 py-2 text-sm uppercase tracking-widest ${doneToday ? "bg-claret text-pink" : "hover:bg-claret hover:text-pink"}`} aria-label="Check in habit" title="Check in habit">
+                        <button type="button" onClick={(event) => { event.stopPropagation(); toggleLog(habit._id); }} className={`inline-flex items-center gap-2 rounded-xl border border-claret px-3 py-2 text-sm uppercase tracking-widest ${doneToday ? "bg-claret text-pink" : "hover:bg-claret hover:text-pink"}`} aria-label="Check in habit" title="Check in habit">
                           <Check className="size-4" />
                         </button>
                         <button type="button" onClick={(event) => { event.stopPropagation(); setDeletingHabit(habit); }} aria-label="Delete habit" title="Delete habit" className="inline-flex items-center justify-center rounded-xl border border-claret px-3 py-2 hover:bg-claret hover:text-pink">
@@ -444,7 +558,7 @@ export default function DopamineCalendar() {
         itemName={deletingHabit?.title || ""}
         itemType="habit"
         onConfirm={() => {
-          if (deletingHabit) deleteHabit(deletingHabit.id);
+          if (deletingHabit) deleteHabit(deletingHabit._id);
         }}
       />
     </Layout>

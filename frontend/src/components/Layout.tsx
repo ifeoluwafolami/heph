@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Brain, Heart, ListChecks, LogOut, Menu, PiggyBank, ScrollText, Utensils, Map, X } from "lucide-react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { logout } from "@/lib/auth";
 import { useState } from "react";
 
@@ -9,11 +9,22 @@ interface LayoutProps {
 }
 export default function Layout({children}: LayoutProps) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const { pathname } = useLocation();
+    const pageTitleByPath: Record<string, string> = {
+        "/dashboard": "DASHBOARD",
+        "/owo": "OWO",
+        "/dopamine-calendar": "DOPAMINE CALENDAR",
+        "/mementos": "MEMENTO",
+        "/ounje": "OUNJE",
+        "/odyssey": "ODYSSEY",
+        "/the-one": "THE ONE",
+    };
+    const pageTitle = pageTitleByPath[pathname] || "";
     const navItemClass = ({ isActive }: { isActive: boolean }) =>
         `inline-flex items-center gap-2 font-pompiere text-xl tracking-widest hover:underline underline-offset-5 hover:translate-x-1 transition-transform duration-300 cursor-pointer ${isActive ? "underline" : ""}`;
 
     const mobileNavItemClass = ({ isActive }: { isActive: boolean }) =>
-        `block rounded-md px-3 py-2 text-lg tracking-widest hover:bg-claret hover:text-pink ${isActive ? "bg-claret text-pink" : ""}`;
+        `flex items-center gap-2 rounded-md px-3 py-2 text-lg tracking-widest hover:bg-claret hover:text-pink ${isActive ? "bg-claret text-pink" : ""}`;
 
     const navLinks = (
         <>
@@ -22,18 +33,18 @@ export default function Layout({children}: LayoutProps) {
             <NavLink to="/mementos" className={navItemClass}><ScrollText className="size-4" />MEMENTO</NavLink>
             <NavLink to="/ounje" className={navItemClass}><Utensils className="size-4" />OUNJE</NavLink>
             <NavLink to="/odyssey" className={navItemClass}><Map className="size-4" />ODYSSEY</NavLink>
-            <NavLink to="/man-list" className={navItemClass}><ListChecks className="size-4" />THE LIST</NavLink>
+            <NavLink to="/the-one" className={navItemClass}><ListChecks className="size-4" />THE ONE</NavLink>
         </>
     );
 
     const mobileNavLinks = (
         <>
-            <NavLink to="/owo" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}>OWO</NavLink>
-            <NavLink to="/dopamine-calendar" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}>DOPAMINE</NavLink>
-            <NavLink to="/mementos" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}>MEMENTO</NavLink>
-            <NavLink to="/ounje" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}>OUNJE</NavLink>
-            <NavLink to="/odyssey" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}>ODYSSEY</NavLink>
-            <NavLink to="/man-list" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}>THE LIST</NavLink>
+            <NavLink to="/owo" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><PiggyBank className="size-4" />OWO</NavLink>
+            <NavLink to="/dopamine-calendar" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><Brain className="size-4" />DOPAMINE</NavLink>
+            <NavLink to="/mementos" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><ScrollText className="size-4" />MEMENTO</NavLink>
+            <NavLink to="/ounje" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><Utensils className="size-4" />OUNJE</NavLink>
+            <NavLink to="/odyssey" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><Map className="size-4" />ODYSSEY</NavLink>
+            <NavLink to="/the-one" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><ListChecks className="size-4" />THE ONE</NavLink>
         </>
     );
 
@@ -43,6 +54,12 @@ export default function Layout({children}: LayoutProps) {
                 <Link to='/dashboard'>
                     <h1 className="font-modern font-black text-2xl md:text-4xl">heph</h1>
                 </Link>
+
+                {pageTitle && (
+                    <div className="pointer-events-none absolute left-72 right-20 hidden text-center font-pompiere text-xl uppercase tracking-[0.25em] text-pink lg:block">
+                        {pageTitle}
+                    </div>
+                )}
                 
                 <div className="flex items-center gap-4 text-sm md:text-base">
                     <button

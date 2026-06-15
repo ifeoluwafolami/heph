@@ -7,7 +7,7 @@ import Mementos from "./pages/Mementos"
 import Ounje from "./pages/Ounje"
 import Odyssey from "./pages/Odyssey"
 import DopamineCalendar from "./pages/DopamineCalendar"
-import ManList from "./pages/ManList"
+import TheOne from "./pages/TheOne"
 import { RequireAuth } from "@/lib/auth"
 
 function App() {
@@ -23,7 +23,7 @@ function App() {
         <Route path="/mementos" element={<RequireAuth><Mementos /></RequireAuth>} />
         <Route path="/ounje" element={<RequireAuth><Ounje /></RequireAuth>} />
         <Route path="/odyssey" element={<RequireAuth><Odyssey /></RequireAuth>} />
-        <Route path="/man-list" element={<RequireAuth><ManList /></RequireAuth>} />
+        <Route path="/the-one" element={<RequireAuth><TheOne /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </HashRouter>

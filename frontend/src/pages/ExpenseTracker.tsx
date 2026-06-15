@@ -7,22 +7,31 @@ import DeleteConfirmationModal from "@/modals/DeleteConfirmationModal";
 import NewExpenseModal from "@/modals/NewExpenseModal";
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, MoreVertical, Pencil, PiggyBank, Plus, Save, Trash2, Wallet } from "lucide-react";
-import { getExpenseSummary, getBudgets, getExpenses, getBudgetHistory, type BudgetDto, type ExpenseDto } from "@/lib/api";
+import {
+    createSavingsTarget,
+    createSavingsTransaction,
+    deleteSavingsTarget as deleteSavingsTargetApi,
+    getBudgetHistory,
+    getBudgets,
+    getExpenses,
+    getExpenseSummary,
+    getSavingsTargets,
+    updateSavingsTarget,
+    type BudgetDto,
+    type ExpenseDto,
+    type SavingsTargetDto,
+    type SavingsTransactionDto,
+} from "@/lib/api";
 
 // Example data removed — real data is loaded from API and kept in component state
 type OwoTab = "savings" | "spending";
-type SavingsTarget = {
-    id: string;
+type LocalSavingsTarget = {
+    _id?: string;
+    id?: string;
     title: string;
     targetAmount: number;
     savedAmount?: number;
-    transactions?: SavingsTransaction[];
-};
-type SavingsTransaction = {
-    id: string;
-    type: "deposit" | "withdraw";
-    amount: number;
-    date: string;
+    transactions?: SavingsTransactionDto[];
 };
 type BudgetCategoryItem = {
     _id?: string;
@@ -47,6 +56,7 @@ type BudgetHistory = {
 };
 
 const SAVINGS_STORAGE_KEY = "heph_owo_savings_targets";
+const SAVINGS_MIGRATION_KEY = "heph_owo_savings_targets_server_migrated";
 
 function todayKey() {
     return new Date().toISOString().slice(0, 10);
@@ -62,28 +72,67 @@ function previousMonthKey() {
     return monthKey(date);
 }
 
-function getSavedAmount(target: SavingsTarget) {
-    if (target.transactions?.length) {
-        return target.transactions.reduce((sum, transaction) => sum + (transaction.type === "deposit" ? transaction.amount : -transaction.amount), 0);
-    }
-    return target.savedAmount || 0;
+function getSavedAmount(target: SavingsTargetDto) {
+    return (target.transactions || []).reduce((sum, transaction) => sum + (transaction.type === "deposit" ? transaction.amount : -transaction.amount), 0);
 }
 
-function loadSavingsTargets() {
+function loadCachedSavingsTargets(): SavingsTargetDto[] {
     try {
         const raw = localStorage.getItem(SAVINGS_STORAGE_KEY);
-        const parsed = raw ? (JSON.parse(raw) as SavingsTarget[]) : [];
+        const parsed = raw ? (JSON.parse(raw) as LocalSavingsTarget[]) : [];
         return parsed.map((target) => {
-            if (target.transactions) return target;
+            const id = target._id || target.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
             const savedAmount = target.savedAmount || 0;
             return {
-                ...target,
-                transactions: savedAmount > 0 ? [{ id: `migration-${target.id}`, type: "deposit" as const, amount: savedAmount, date: todayKey() }] : [],
+                _id: id,
+                title: target.title,
+                targetAmount: target.targetAmount,
+                transactions: target.transactions || (savedAmount > 0 ? [{ id: `migration-${id}`, type: "deposit" as const, amount: savedAmount, date: todayKey() }] : []),
             };
         });
     } catch {
         return [];
     }
+}
+
+function cacheSavingsTargets(targets: SavingsTargetDto[]) {
+    localStorage.setItem(SAVINGS_STORAGE_KEY, JSON.stringify(targets.map((target) => ({
+        id: target._id,
+        title: target.title,
+        targetAmount: target.targetAmount,
+        transactions: target.transactions,
+    }))));
+}
+
+async function getSyncedSavingsTargets() {
+    const cachedTargets = loadCachedSavingsTargets();
+    let remoteTargets: SavingsTargetDto[] = [];
+
+    try {
+        remoteTargets = await getSavingsTargets();
+    } catch {
+        return cachedTargets;
+    }
+
+    const shouldMigrate = !localStorage.getItem(SAVINGS_MIGRATION_KEY) && cachedTargets.length > 0;
+    if (!shouldMigrate) {
+        cacheSavingsTargets(remoteTargets);
+        localStorage.setItem(SAVINGS_MIGRATION_KEY, "true");
+        return remoteTargets;
+    }
+
+    const knownTitles = new Set(remoteTargets.map((target) => target.title.trim().toLowerCase()));
+    const migrated = await Promise.all(cachedTargets
+        .filter((target) => !knownTitles.has(target.title.trim().toLowerCase()))
+        .map((target) => createSavingsTarget({
+            title: target.title,
+            targetAmount: target.targetAmount,
+            transactions: target.transactions || [],
+        })));
+    const nextTargets = [...migrated, ...remoteTargets];
+    cacheSavingsTargets(nextTargets);
+    localStorage.setItem(SAVINGS_MIGRATION_KEY, "true");
+    return nextTargets;
 }
 
 export default function ExpenseTracker() {
@@ -97,16 +146,16 @@ export default function ExpenseTracker() {
     const [expensesMeta, setExpensesMeta] = useState<{ total?: number; page?: number; limit?: number } | null>(null)
     const [budgetHistoryMonth, setBudgetHistoryMonth] = useState(previousMonthKey)
     const [budgetHistory, setBudgetHistory] = useState<BudgetHistory | null>(null)
-    const [savingsTargets, setSavingsTargets] = useState<SavingsTarget[]>(loadSavingsTargets)
+    const [savingsTargets, setSavingsTargets] = useState<SavingsTargetDto[]>(loadCachedSavingsTargets)
     const [savingsTitle, setSavingsTitle] = useState("")
     const [savingsTargetAmount, setSavingsTargetAmount] = useState("")
     const [savingsAmounts, setSavingsAmounts] = useState<Record<string, string>>({})
-    const [selectedSavingsTarget, setSelectedSavingsTarget] = useState<SavingsTarget | null>(null)
+    const [selectedSavingsTarget, setSelectedSavingsTarget] = useState<SavingsTargetDto | null>(null)
     const [openSavingsMenuId, setOpenSavingsMenuId] = useState<string | null>(null)
-    const [editingSavingsTarget, setEditingSavingsTarget] = useState<SavingsTarget | null>(null)
+    const [editingSavingsTarget, setEditingSavingsTarget] = useState<SavingsTargetDto | null>(null)
     const [editSavingsTitle, setEditSavingsTitle] = useState("")
     const [editSavingsTargetAmount, setEditSavingsTargetAmount] = useState("")
-    const [deletingSavingsTarget, setDeletingSavingsTarget] = useState<SavingsTarget | null>(null)
+    const [deletingSavingsTarget, setDeletingSavingsTarget] = useState<SavingsTargetDto | null>(null)
 
     useEffect(() => {
         let mounted = true
@@ -115,6 +164,12 @@ export default function ExpenseTracker() {
                 const s = await getExpenseSummary()
                 if (!mounted) return
                 setSummary({ totalSpent: s.totalSpent, totalBudgeted: s.totalBudgeted, remaining: s.remaining })
+
+                getSyncedSavingsTargets()
+                    .then((savings) => {
+                        if (mounted) setSavingsTargets(savings)
+                    })
+                    .catch(() => {})
 
                 const budgets = await getBudgets()
                 if (!mounted) return
@@ -151,16 +206,12 @@ export default function ExpenseTracker() {
         const dataHandler = (ev: Event) => {
             const detail = (ev as CustomEvent)?.detail
             if (!detail || !detail.resource) return load().catch(() => {})
-            if (detail.resource === 'budget' || detail.resource === 'expense') return load().catch(() => {})
+            if (detail.resource === 'budget' || detail.resource === 'expense' || detail.resource === 'savings') return load().catch(() => {})
         }
         window.addEventListener('heph:expense:created', handler as EventListener)
         window.addEventListener('heph:data:changed', dataHandler as EventListener)
         return () => { mounted = false; window.removeEventListener('heph:expense:created', handler as EventListener); window.removeEventListener('heph:data:changed', dataHandler as EventListener) }
     }, [expensePage])
-
-    useEffect(() => {
-        localStorage.setItem(SAVINGS_STORAGE_KEY, JSON.stringify(savingsTargets));
-    }, [savingsTargets]);
 
     useEffect(() => {
         let mounted = true;
@@ -177,73 +228,66 @@ export default function ExpenseTracker() {
         return () => { mounted = false };
     }, [budgetHistoryMonth]);
 
-    function addSavingsTarget() {
+    async function addSavingsTarget() {
         const cleanTitle = savingsTitle.trim();
         const cleanAmount = Number(savingsTargetAmount);
         if (!cleanTitle || !Number.isFinite(cleanAmount) || cleanAmount <= 0) return;
-        setSavingsTargets((prev) => [
-            {
-                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                title: cleanTitle,
-                targetAmount: cleanAmount,
-                savedAmount: 0,
-                transactions: [],
-            },
-            ...prev,
-        ]);
+        const created = await createSavingsTarget({ title: cleanTitle, targetAmount: cleanAmount, transactions: [] });
+        setSavingsTargets((prev) => {
+            const nextTargets = [created, ...prev];
+            cacheSavingsTargets(nextTargets);
+            return nextTargets;
+        });
         setSavingsTitle("");
         setSavingsTargetAmount("");
+        window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
     }
 
-    function updateSavings(targetId: string, direction: "deposit" | "withdraw") {
+    async function updateSavings(targetId: string, direction: "deposit" | "withdraw") {
         const amount = Number(savingsAmounts[targetId] || 0);
         if (!Number.isFinite(amount) || amount <= 0) return;
-        setSavingsTargets((prev) =>
-            prev.map((target) => {
-                if (target.id !== targetId) return target;
-                const savedAmount = getSavedAmount(target);
-                const safeAmount = direction === "withdraw" ? Math.min(amount, savedAmount) : amount;
-                if (safeAmount <= 0) return target;
-                return {
-                    ...target,
-                    savedAmount: undefined,
-                    transactions: [
-                        ...(target.transactions || []),
-                        {
-                            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                            type: direction === "deposit" ? "deposit" : "withdraw",
-                            amount: safeAmount,
-                            date: todayKey(),
-                        },
-                    ],
-                };
-            })
-        );
+        const updated = await createSavingsTransaction(targetId, { type: direction, amount, date: todayKey() });
+        setSavingsTargets((prev) => {
+            const nextTargets = prev.map((target) => target._id === targetId ? updated : target);
+            cacheSavingsTargets(nextTargets);
+            return nextTargets;
+        });
+        setSelectedSavingsTarget((target) => target?._id === targetId ? updated : target);
         setSavingsAmounts((prev) => ({ ...prev, [targetId]: "" }));
         window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
     }
 
-    function deleteSavingsTarget(targetId: string) {
-        setSavingsTargets((prev) => prev.filter((target) => target.id !== targetId));
+    async function deleteSavingsTarget(targetId: string) {
+        await deleteSavingsTargetApi(targetId);
+        setSavingsTargets((prev) => {
+            const nextTargets = prev.filter((target) => target._id !== targetId);
+            cacheSavingsTargets(nextTargets);
+            return nextTargets;
+        });
         setDeletingSavingsTarget(null);
         setSelectedSavingsTarget(null);
         window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
     }
 
-    function openEditSavingsTarget(target: SavingsTarget) {
+    function openEditSavingsTarget(target: SavingsTargetDto) {
         setOpenSavingsMenuId(null);
         setEditingSavingsTarget(target);
         setEditSavingsTitle(target.title);
         setEditSavingsTargetAmount(String(target.targetAmount));
     }
 
-    function saveSavingsTargetEdit() {
+    async function saveSavingsTargetEdit() {
         if (!editingSavingsTarget) return;
         const cleanTitle = editSavingsTitle.trim();
         const cleanAmount = Number(editSavingsTargetAmount);
         if (!cleanTitle || !Number.isFinite(cleanAmount) || cleanAmount <= 0) return;
-        setSavingsTargets((prev) => prev.map((target) => target.id === editingSavingsTarget.id ? { ...target, title: cleanTitle, targetAmount: cleanAmount } : target));
-        setSelectedSavingsTarget((target) => target?.id === editingSavingsTarget.id ? { ...target, title: cleanTitle, targetAmount: cleanAmount } : target);
+        const updated = await updateSavingsTarget(editingSavingsTarget._id, { title: cleanTitle, targetAmount: cleanAmount });
+        setSavingsTargets((prev) => {
+            const nextTargets = prev.map((target) => target._id === editingSavingsTarget._id ? updated : target);
+            cacheSavingsTargets(nextTargets);
+            return nextTargets;
+        });
+        setSelectedSavingsTarget((target) => target?._id === editingSavingsTarget._id ? updated : target);
         setEditingSavingsTarget(null);
         window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
     }
@@ -325,7 +369,7 @@ export default function ExpenseTracker() {
                                         const percent = Math.min(100, Math.round((savedAmount / target.targetAmount) * 100));
                                         return (
                                             <article
-                                                key={target.id}
+                                                key={target._id}
                                                 onClick={() => setSelectedSavingsTarget(target)}
                                                 onKeyDown={(event) => {
                                                     if (event.key === "Enter" || event.key === " ") {
@@ -345,18 +389,18 @@ export default function ExpenseTracker() {
                                                     </div>
                                                     <div className="relative flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
                                                         <input
-                                                            value={savingsAmounts[target.id] || ""}
-                                                            onChange={(event) => setSavingsAmounts((prev) => ({ ...prev, [target.id]: event.target.value.replace(/[^0-9]/g, "") }))}
+                                                            value={savingsAmounts[target._id] || ""}
+                                                            onChange={(event) => setSavingsAmounts((prev) => ({ ...prev, [target._id]: event.target.value.replace(/[^0-9]/g, "") }))}
                                                             inputMode="numeric"
                                                             className="w-28 rounded-xl border border-claret/30 bg-pink px-3 py-2"
                                                             placeholder="Amount"
                                                         />
-                                                        <button type="button" onClick={() => updateSavings(target.id, "deposit")} className="rounded-xl border border-claret bg-claret px-3 py-2 text-sm uppercase tracking-widest text-pink">Save</button>
-                                                        <button type="button" onClick={() => updateSavings(target.id, "withdraw")} className="rounded-xl border border-claret px-3 py-2 text-sm uppercase tracking-widest hover:bg-claret hover:text-pink">Withdraw</button>
-                                                        <button type="button" onClick={() => setOpenSavingsMenuId((current) => current === target.id ? null : target.id)} aria-label="Savings target menu" title="Savings target menu" className="inline-flex items-center justify-center rounded-xl border border-claret px-3 py-2 hover:bg-claret hover:text-pink">
+                                                        <button type="button" onClick={() => updateSavings(target._id, "deposit")} className="rounded-xl border border-claret bg-claret px-3 py-2 text-sm uppercase tracking-widest text-pink">Save</button>
+                                                        <button type="button" onClick={() => updateSavings(target._id, "withdraw")} className="rounded-xl border border-claret px-3 py-2 text-sm uppercase tracking-widest hover:bg-claret hover:text-pink">Withdraw</button>
+                                                        <button type="button" onClick={() => setOpenSavingsMenuId((current) => current === target._id ? null : target._id)} aria-label="Savings target menu" title="Savings target menu" className="inline-flex items-center justify-center rounded-xl border border-claret px-3 py-2 hover:bg-claret hover:text-pink">
                                                             <MoreVertical className="size-4" />
                                                         </button>
-                                                        {openSavingsMenuId === target.id && (
+                                                        {openSavingsMenuId === target._id && (
                                                             <div className="absolute right-0 top-12 z-10 w-36 rounded-xl border border-claret/20 bg-pink p-2 shadow-xl">
                                                                 <button type="button" onClick={() => openEditSavingsTarget(target)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-claret hover:text-pink"><Pencil className="size-4" /> Edit</button>
                                                                 <button type="button" onClick={() => { setOpenSavingsMenuId(null); setDeletingSavingsTarget(target); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-claret hover:text-pink"><Trash2 className="size-4" /> Delete</button>
@@ -385,10 +429,10 @@ export default function ExpenseTracker() {
                 <div className="rounded-2xl bg-pink text-claret p-6 md:p-8 shadow-xl border border-claret/20">
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between h-full">
                         <div>
-                            <h1 className="text-3xl md:text-5xl font-bold uppercase">OWO</h1>
+                            <h1 className="text-3xl md:text-5xl font-bold uppercase">Expenses</h1>
                             <p className="mt-2 text-lg md:text-2xl">Hi, money maker! Here's where we do one of your favorite things - plan how to spend money!</p>
                         </div>
-                        <div className="flex gap-3 h-full items-center flex-wrap">
+                        <div className="flex gap-3 h-full items-center flex-wrap justify-center md:justify-end">
                             <button
                                 type="button"
                                 onClick={() => setIsNewExpenseOpen(true)}
@@ -410,7 +454,7 @@ export default function ExpenseTracker() {
                 <section className="my-6 flex flex-wrap justify-center gap-4">
                     <article className="w-[calc((100%-1rem)/2)] md:w-[calc((100%-2rem)/3)] rounded-2xl border border-claret/20 bg-pink p-6 md:p-8 text-claret shadow-xl">
                         <p className="text-3xl md:text-4xl font-bold">N{summary.totalSpent.toLocaleString()}</p>
-                        <p className="mt-2 text-base md:text-xl uppercase tracking-wider opacity-80">Total Spent This Month</p>
+                        <p className="mt-2 text-base md:text-xl uppercase tracking-wider opacity-80">Total Spent</p>
                     </article>
                     <article className="w-[calc((100%-1rem)/2)] md:w-[calc((100%-2rem)/3)] rounded-2xl border border-claret/20 bg-pink p-6 md:p-8 text-claret shadow-xl">
                         <p className="text-3xl md:text-4xl font-bold">N{summary.remaining.toLocaleString()}</p>
@@ -564,7 +608,7 @@ export default function ExpenseTracker() {
                 itemName={deletingSavingsTarget?.title || ""}
                 itemType="savings target"
                 onConfirm={() => {
-                    if (deletingSavingsTarget) deleteSavingsTarget(deletingSavingsTarget.id);
+                    if (deletingSavingsTarget) deleteSavingsTarget(deletingSavingsTarget._id);
                 }}
             />
         </Layout>

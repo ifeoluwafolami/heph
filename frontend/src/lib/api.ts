@@ -66,9 +66,56 @@ export type MementoDto = {
   editedAt?: string | null
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://heph-backend.onrender.com/api/v1'
-// 'http://localhost:4000/api/v1'
-// 'https://heph-backend.onrender.com/api/v1' 
+export type HabitFrequency = 'daily' | 'weekly' | 'monthly'
+
+export type HabitDto = {
+  _id: string
+  title: string
+  frequency: HabitFrequency
+  target: number
+  logs: string[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type SavingsTransactionDto = {
+  id: string
+  type: 'deposit' | 'withdraw'
+  amount: number
+  date: string
+}
+
+export type SavingsTargetDto = {
+  _id: string
+  title: string
+  targetAmount: number
+  transactions: SavingsTransactionDto[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type TheOneItemDto = {
+  _id: string
+  title: string
+  note?: string
+  createdAt?: string
+}
+
+const PROD_API_BASE = 'https://heph-backend.onrender.com/api/v1'
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
+
+function getApiBase() {
+  const configuredApiBase = import.meta.env.VITE_API_BASE_URL
+  const explicitlyUseLocalApi = import.meta.env.VITE_USE_LOCAL_API === 'true'
+  const isLocalFrontend = typeof window !== 'undefined' && LOCAL_HOSTS.has(window.location.hostname)
+  const hasViteProxy = import.meta.env.DEV
+
+  if (isLocalFrontend && hasViteProxy && !explicitlyUseLocalApi) return '/api/v1'
+  if (isLocalFrontend && explicitlyUseLocalApi) return configuredApiBase || 'http://localhost:4000/api/v1'
+  return configuredApiBase || PROD_API_BASE
+}
+
+const API_BASE = getApiBase()
 
 
 export function setAuthTokens(accessToken: string, refreshToken?: string) {
@@ -232,6 +279,85 @@ export type WeightDto = {
 
 export async function getWeights(limit = 20, page = 1) {
   return request<WeightDto[]>(`/weights?limit=${limit}&page=${page}`)
+}
+
+export async function getHabits() {
+  return request<HabitDto[]>('/habits')
+}
+
+export async function createHabit(payload: { title: string; frequency: HabitFrequency; target: number; logs?: string[] }) {
+  return request<HabitDto>('/habits', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateHabit(id: string, payload: Partial<{ title: string; frequency: HabitFrequency; target: number; logs: string[] }>) {
+  return request<HabitDto>(`/habits/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function toggleHabitLog(id: string, date: string) {
+  return request<HabitDto>(`/habits/${id}/toggle-log`, {
+    method: 'PATCH',
+    body: JSON.stringify({ date }),
+  })
+}
+
+export async function deleteHabit(id: string) {
+  return request<{ id: string }>(`/habits/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getSavingsTargets() {
+  return request<SavingsTargetDto[]>('/savings')
+}
+
+export async function createSavingsTarget(payload: { title: string; targetAmount: number; transactions?: SavingsTransactionDto[] }) {
+  return request<SavingsTargetDto>('/savings', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateSavingsTarget(id: string, payload: Partial<{ title: string; targetAmount: number }>) {
+  return request<SavingsTargetDto>(`/savings/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function createSavingsTransaction(id: string, payload: { type: 'deposit' | 'withdraw'; amount: number; date: string }) {
+  return request<SavingsTargetDto>(`/savings/${id}/transactions`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteSavingsTarget(id: string) {
+  return request<{ id: string }>(`/savings/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getTheOneItems() {
+  return request<TheOneItemDto[]>('/the-one')
+}
+
+export async function createTheOneItem(payload: { title: string; note?: string }) {
+  return request<TheOneItemDto>('/the-one', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteTheOneItem(id: string) {
+  return request<{ id: string }>(`/the-one/${id}`, {
+    method: 'DELETE',
+  })
 }
 
 export async function getExpenseSummary() {
