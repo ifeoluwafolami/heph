@@ -21,6 +21,9 @@ export default function Login() {
             const res = await apiLogin(email, password)
             setAuthTokens(res.accessToken, res.refreshToken)
             setStoredUser(res.user)
+            Object.keys(sessionStorage)
+                .filter((key) => key.startsWith("heph_bloom_reminders_seen_"))
+                .forEach((key) => sessionStorage.removeItem(key))
             navigate(from, { replace: true })
         } catch (err: any) {
             setError(err.message || 'Login failed')

@@ -7,7 +7,6 @@ import { Check, ChevronLeft, ChevronRight, Circle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
     createHabit,
-    createSavingsTarget,
     getDashboardOverview,
     getRecentDashboardExpenses,
     getRecentDashboardMementos,
@@ -24,7 +23,6 @@ import {
     type HabitFrequency,
     type MementoDto,
     type SavingsTargetDto,
-    type SavingsTransactionDto,
     type SidequestDto,
     type WeightDto,
 } from "@/lib/api";
@@ -35,12 +33,8 @@ type RecentExpenseItem = {
     amount: string;
     category?: string | null;
 }
-type SavingsTransaction = { id: string; type: "deposit" | "withdraw"; amount: number; date: string }
-type SavingsTarget = { _id?: string; id?: string; title: string; targetAmount: number; savedAmount?: number; transactions?: SavingsTransaction[] }
 type LocalHabit = { id: string; title: string; frequency: HabitFrequency; target: number; logs: string[] }
 
-const SAVINGS_STORAGE_KEY = "heph_owo_savings_targets"
-const SAVINGS_MIGRATION_KEY = "heph_owo_savings_targets_server_migrated"
 const HABITS_STORAGE_KEY = "heph_dopamine_calendar"
 const HABITS_MIGRATION_KEY = "heph_dopamine_calendar_server_migrated"
 const DASHBOARD_HABITS_PER_PAGE = 6
@@ -147,65 +141,6 @@ function isOngoingSidequest(sidequest: SidequestDto) {
     return done > 0
 }
 
-function loadCachedSavingsTargets(): SavingsTargetDto[] {
-    try {
-        const raw = localStorage.getItem(SAVINGS_STORAGE_KEY)
-        const parsed = raw ? JSON.parse(raw) as SavingsTarget[] : []
-        return parsed.map((target) => {
-            const id = target._id || target.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`
-            const savedAmount = target.savedAmount || 0
-            return {
-                _id: id,
-                title: target.title,
-                targetAmount: target.targetAmount,
-                transactions: target.transactions || (savedAmount > 0 ? [{ id: `migration-${id}`, type: "deposit" as const, amount: savedAmount, date: todayKey() }] : []),
-            }
-        })
-    } catch {
-        return []
-    }
-}
-
-function cacheSavingsTargets(targets: SavingsTargetDto[]) {
-    localStorage.setItem(SAVINGS_STORAGE_KEY, JSON.stringify(targets.map((target) => ({
-        id: target._id,
-        title: target.title,
-        targetAmount: target.targetAmount,
-        transactions: target.transactions,
-    }))))
-}
-
-async function getSyncedSavingsTargets() {
-    const cachedTargets = loadCachedSavingsTargets()
-    let remoteTargets: SavingsTargetDto[] = []
-
-    try {
-        remoteTargets = await getSavingsTargets()
-    } catch {
-        return cachedTargets
-    }
-
-    const shouldMigrate = !localStorage.getItem(SAVINGS_MIGRATION_KEY) && cachedTargets.length > 0
-    if (!shouldMigrate) {
-        cacheSavingsTargets(remoteTargets)
-        localStorage.setItem(SAVINGS_MIGRATION_KEY, "true")
-        return remoteTargets
-    }
-
-    const knownTitles = new Set(remoteTargets.map((target) => target.title.trim().toLowerCase()))
-    const migrated = await Promise.all(cachedTargets
-        .filter((target) => !knownTitles.has(target.title.trim().toLowerCase()))
-        .map((target) => createSavingsTarget({
-            title: target.title,
-            targetAmount: target.targetAmount,
-            transactions: target.transactions as SavingsTransactionDto[],
-        })))
-    const nextTargets = [...migrated, ...remoteTargets]
-    cacheSavingsTargets(nextTargets)
-    localStorage.setItem(SAVINGS_MIGRATION_KEY, "true")
-    return nextTargets
-}
-
 function loadCachedHabits(): HabitDto[] {
     try {
         const raw = localStorage.getItem(HABITS_STORAGE_KEY)
@@ -301,7 +236,7 @@ export default function Dashboard() {
     const [recentExpenses, setRecentExpenses] = useState<RecentExpenseItem[]>([])
     const [recentMementos, setRecentMementos] = useState<MementoDto[]>([])
     const [totalSavedThisMonth, setTotalSavedThisMonth] = useState(0)
-    const [savingsOverviewTargets, setSavingsOverviewTargets] = useState<SavingsTargetDto[]>(loadCachedSavingsTargets)
+    const [savingsOverviewTargets, setSavingsOverviewTargets] = useState<SavingsTargetDto[]>([])
     const [recipesTotal, setRecipesTotal] = useState(0)
     const [weightEntries, setWeightEntries] = useState<WeightDto[]>([])
     const [sidequests, setSidequests] = useState<SidequestDto[]>([])
@@ -311,13 +246,15 @@ export default function Dashboard() {
     const [habitsPage, setHabitsPage] = useState(1)
 
     async function loadLocalOverview() {
-        const savings = await getSyncedSavingsTargets().catch(() => loadCachedSavingsTargets())
+        const savings = await getSavingsTargets()
         setSavingsOverviewTargets(savings)
         const saved = savings.reduce((sum, target) => {
             const transactions = target.transactions || []
             return sum + transactions
-                .filter((transaction) => transaction.type === "deposit" && monthKey(transaction.date) === monthKey())
-                .reduce((targetSum, transaction) => targetSum + transaction.amount, 0)
+                .filter((transaction) => monthKey(transaction.date) === monthKey())
+                .reduce((targetSum, transaction) => (
+                    targetSum + (transaction.type === "deposit" ? transaction.amount : -transaction.amount)
+                ), 0)
         }, 0)
         setTotalSavedThisMonth(saved)
     }

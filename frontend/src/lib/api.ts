@@ -101,6 +101,36 @@ export type TheOneItemDto = {
   createdAt?: string
 }
 
+export type MealType = 'breakfast' | 'brunch' | 'lunch' | 'preworkout' | 'snack' | 'dinner'
+
+export type FoodPlanEntryDto = {
+  _id: string
+  date: string
+  meal: MealType
+  food: string
+  calories: number
+  recipeId?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type FoodPlanSettingsDto = {
+  _id: string
+  dailyCalorieTarget: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type BloomPlanDto = {
+  _id: string
+  title: string
+  date: string
+  color: string
+  notes?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
 const PROD_API_BASE = 'https://heph-backend.onrender.com/api/v1'
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
 
@@ -270,7 +300,9 @@ export type RecipeDto = {
   title: string
   servings: number
   caloriesPerServing: number
+  steps?: string[]
   notes?: string
+  link?: string
 }
 
 export async function getRecipes(limit = 50, page = 1) {
@@ -324,6 +356,10 @@ export async function getSavingsTargets() {
   return request<SavingsTargetDto[]>('/savings')
 }
 
+export async function getSavingsSummary(month?: string) {
+  return request<{ totalSaved: number; totalSavedThisMonth: number }>(`/savings/summary${month ? `?month=${encodeURIComponent(month)}` : ''}`)
+}
+
 export async function createSavingsTarget(payload: { title: string; targetAmount: number; transactions?: SavingsTransactionDto[] }) {
   return request<SavingsTargetDto>('/savings', {
     method: 'POST',
@@ -347,6 +383,60 @@ export async function createSavingsTransaction(id: string, payload: { type: 'dep
 
 export async function deleteSavingsTarget(id: string) {
   return request<{ id: string }>(`/savings/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getFoodPlanSettings() {
+  return request<FoodPlanSettingsDto>('/food-plans/settings')
+}
+
+export async function updateFoodPlanSettings(payload: { dailyCalorieTarget: number }) {
+  return request<FoodPlanSettingsDto>('/food-plans/settings', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function getFoodPlanEntries(start?: string, end?: string) {
+  const query = start && end ? `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}` : ''
+  return request<FoodPlanEntryDto[]>(`/food-plans${query}`)
+}
+
+export async function createFoodPlanEntry(payload: { date: string; meal: MealType; food: string; calories: number; recipeId?: string }) {
+  return request<FoodPlanEntryDto>('/food-plans', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteFoodPlanEntry(id: string) {
+  return request<{ id: string }>(`/food-plans/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getBloomPlans(start?: string, end?: string) {
+  const query = start && end ? `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}` : ''
+  return request<BloomPlanDto[]>(`/bloom${query}`)
+}
+
+export async function createBloomPlan(payload: { title: string; date: string; color: string; notes?: string }) {
+  return request<BloomPlanDto>('/bloom', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateBloomPlan(id: string, payload: Partial<{ title: string; date: string; color: string; notes?: string }>) {
+  return request<BloomPlanDto>(`/bloom/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteBloomPlan(id: string) {
+  return request<{ id: string }>(`/bloom/${id}`, {
     method: 'DELETE',
   })
 }
@@ -429,14 +519,14 @@ export async function deleteExpense(id: string) {
   })
 }
 
-export async function createRecipe(payload: { title: string; servings: number; caloriesPerServing: number; notes?: string }) {
+export async function createRecipe(payload: { title: string; servings: number; caloriesPerServing: number; steps?: string[]; notes?: string; link?: string }) {
   return request<RecipeDto>('/recipes', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
 }
 
-export async function updateRecipe(id: string, payload: Partial<{ title: string; servings: number; caloriesPerServing: number; notes?: string }>) {
+export async function updateRecipe(id: string, payload: Partial<{ title: string; servings: number; caloriesPerServing: number; steps: string[]; notes?: string; link?: string }>) {
   return request<RecipeDto>(`/recipes/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(payload),

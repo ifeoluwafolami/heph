@@ -124,6 +124,7 @@ export const ModalFrame: React.FC<FrameProps> = ({
           className="fixed inset-0 z-[60] flex items-center justify-center bg-claret/70 p-4"
           role="alertdialog"
           aria-modal="true"
+          onClick={(e) => e.stopPropagation()}
         >
           <div className="w-full max-w-md rounded-2xl border border-claret/20 bg-pink p-6 text-claret shadow-2xl">
             <h2 className="text-2xl font-bold uppercase">Close Modal?</h2>

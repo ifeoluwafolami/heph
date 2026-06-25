@@ -10,7 +10,7 @@ type CustomDateInputProps = {
   className?: string;
 };
 
-const WEEK_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const toDate = (value?: string) => {
   if (!value) return null;
@@ -119,7 +119,7 @@ export default function CustomDateInput({
 
   const monthStart = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
   const calendarStart = new Date(monthStart);
-  calendarStart.setDate(monthStart.getDate() - monthStart.getDay());
+  calendarStart.setDate(monthStart.getDate() - ((monthStart.getDay() + 6) % 7));
 
   const days = useMemo(
     () =>

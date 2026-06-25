@@ -6,7 +6,9 @@ const RecipeSchema = new Schema(
     title: { type: String, required: true },
     servings: { type: Number, required: true },
     caloriesPerServing: { type: Number, required: true },
+    steps: { type: [String], default: [] },
     notes: { type: String, default: '' },
+    link: { type: String, default: '' },
   },
   { timestamps: true }
 )

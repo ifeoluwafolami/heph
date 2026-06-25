@@ -1,14 +1,26 @@
 import type { ReactNode } from "react";
-import { Brain, Heart, ListChecks, LogOut, Menu, PiggyBank, ScrollText, Utensils, Map, X } from "lucide-react";
+import { Bell, Brain, Heart, ListChecks, LogOut, Menu, PiggyBank, ScrollText, Sprout, Utensils, Map, X } from "lucide-react";
 import { Link, NavLink, useLocation } from "react-router-dom";
+import { getAccessToken, getBloomPlans, type BloomPlanDto } from "@/lib/api";
 import { logout } from "@/lib/auth";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface LayoutProps {
     children: ReactNode;
 }
+
+function todayKey() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function parseDateKey(dateKey: string) {
+    return new Date(`${dateKey}T00:00:00`);
+}
+
 export default function Layout({children}: LayoutProps) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [bloomPlans, setBloomPlans] = useState<BloomPlanDto[]>([]);
+    const [showBloomReminders, setShowBloomReminders] = useState(false);
     const { pathname } = useLocation();
     const pageTitleByPath: Record<string, string> = {
         "/dashboard": "DASHBOARD",
@@ -16,6 +28,7 @@ export default function Layout({children}: LayoutProps) {
         "/dopamine-calendar": "DOPAMINE CALENDAR",
         "/mementos": "MEMENTO",
         "/ounje": "OUNJE",
+        "/bloom": "BLOOM",
         "/odyssey": "ODYSSEY",
         "/the-one": "THE ONE",
     };
@@ -32,6 +45,7 @@ export default function Layout({children}: LayoutProps) {
             <NavLink to="/dopamine-calendar" className={navItemClass}><Brain className="size-4" />DOPAMINE</NavLink>
             <NavLink to="/mementos" className={navItemClass}><ScrollText className="size-4" />MEMENTO</NavLink>
             <NavLink to="/ounje" className={navItemClass}><Utensils className="size-4" />OUNJE</NavLink>
+            <NavLink to="/bloom" className={navItemClass}><Sprout className="size-4" />BLOOM</NavLink>
             <NavLink to="/odyssey" className={navItemClass}><Map className="size-4" />ODYSSEY</NavLink>
             <NavLink to="/the-one" className={navItemClass}><ListChecks className="size-4" />THE ONE</NavLink>
         </>
@@ -43,10 +57,52 @@ export default function Layout({children}: LayoutProps) {
             <NavLink to="/dopamine-calendar" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><Brain className="size-4" />DOPAMINE</NavLink>
             <NavLink to="/mementos" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><ScrollText className="size-4" />MEMENTO</NavLink>
             <NavLink to="/ounje" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><Utensils className="size-4" />OUNJE</NavLink>
+            <NavLink to="/bloom" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><Sprout className="size-4" />BLOOM</NavLink>
             <NavLink to="/odyssey" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><Map className="size-4" />ODYSSEY</NavLink>
             <NavLink to="/the-one" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><ListChecks className="size-4" />THE ONE</NavLink>
         </>
     );
+    const upcomingBloomPlans = useMemo(() => {
+        const start = parseDateKey(todayKey()).getTime();
+        const end = start + 7 * 24 * 60 * 60 * 1000;
+        return bloomPlans
+            .filter((plan) => {
+                const time = parseDateKey(plan.date).getTime();
+                return time >= start && time <= end;
+            })
+            .sort((a, b) => a.date.localeCompare(b.date));
+    }, [bloomPlans]);
+
+    useEffect(() => {
+        let mounted = true;
+        const refreshBloomPlans = () => {
+            if (!getAccessToken()) return;
+            const start = todayKey();
+            const endDate = parseDateKey(start);
+            endDate.setDate(endDate.getDate() + 7);
+            getBloomPlans(start, `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`)
+                .then((plans) => {
+                    if (mounted) setBloomPlans(plans);
+                })
+                .catch(() => {
+                    if (mounted) setBloomPlans([]);
+                });
+        };
+        refreshBloomPlans();
+        window.addEventListener("heph:bloom:changed", refreshBloomPlans);
+        return () => {
+            mounted = false;
+            window.removeEventListener("heph:bloom:changed", refreshBloomPlans);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!upcomingBloomPlans.length) return;
+        const reminderKey = `heph_bloom_reminders_seen_${todayKey()}`;
+        if (sessionStorage.getItem(reminderKey)) return;
+        setShowBloomReminders(true);
+        sessionStorage.setItem(reminderKey, "true");
+    }, [upcomingBloomPlans]);
 
     return (
         <div className="min-h-screen bg-claret text-pink font-pompiere tracking-widest flex flex-col">
@@ -104,6 +160,51 @@ export default function Layout({children}: LayoutProps) {
                     <span>by Hephzibah Ifeoluwa Folami.</span>
                 </div>
             </footer>
+
+            {showBloomReminders && upcomingBloomPlans.length ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-claret/60 p-4">
+                    <div className="w-full max-w-lg rounded-2xl border border-claret/20 bg-pink p-6 text-claret shadow-2xl">
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-2">
+                                <Bell className="size-5" />
+                                <h2 className="text-2xl font-bold uppercase">Bloom Reminders</h2>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowBloomReminders(false)}
+                                aria-label="Close reminders"
+                                title="Close reminders"
+                                className="inline-flex size-8 items-center justify-center rounded-md hover:bg-claret hover:text-pink"
+                            >
+                                <X className="size-5" />
+                            </button>
+                        </div>
+                        <div className="mt-4 space-y-2">
+                            {upcomingBloomPlans.map((plan) => (
+                                <div key={plan._id} className="rounded-xl border border-claret/30 p-3">
+                                    <div className="flex items-start gap-3">
+                                        <span className="mt-1 size-3 shrink-0 rounded-full" style={{ backgroundColor: plan.color }} />
+                                        <div>
+                                            <p className="text-sm uppercase tracking-widest opacity-75">{new Date(`${plan.date}T00:00:00`).toLocaleDateString("en-NG", { weekday: "short", month: "short", day: "numeric" })}</p>
+                                            <p className="text-lg leading-tight">{plan.title}</p>
+                                            {plan.notes ? <p className="mt-1 whitespace-pre-wrap text-sm tracking-normal opacity-80">{plan.notes}</p> : null}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-5 flex justify-end">
+                            <Link
+                                to="/bloom"
+                                onClick={() => setShowBloomReminders(false)}
+                                className="rounded-2xl border border-claret bg-claret px-4 py-3 text-sm uppercase tracking-widest text-pink hover:bg-claret/90"
+                            >
+                                Open Bloom
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
             
         </div>
     )

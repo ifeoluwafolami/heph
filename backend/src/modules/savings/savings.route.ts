@@ -24,12 +24,39 @@ function getSavedAmount(target: { transactions?: Array<{ type: string; amount: n
   return (target.transactions || []).reduce((sum, transaction) => sum + (transaction.type === 'deposit' ? transaction.amount : -transaction.amount), 0)
 }
 
+function currentMonthKey() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Lagos',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date())
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  return `${year}-${month}`
+}
+
 router.get('/', async (req, res) => {
   const userId = req.auth?.userId
   if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_ERROR' } })
 
   const items = await SavingsTarget.find({ userId: new Types.ObjectId(userId) }).sort({ createdAt: -1 }).lean()
   res.json({ success: true, data: items })
+})
+
+router.get('/summary', async (req, res) => {
+  const userId = req.auth?.userId
+  if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_ERROR' } })
+
+  const month = typeof req.query.month === 'string' && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : currentMonthKey()
+  const items = await SavingsTarget.find({ userId: new Types.ObjectId(userId) }).lean()
+  const totalSaved = items.reduce((sum, target) => sum + getSavedAmount(target), 0)
+  const totalSavedThisMonth = items.reduce((sum, target) => {
+    return sum + (target.transactions || [])
+      .filter((transaction) => transaction.date.slice(0, 7) === month)
+      .reduce((monthSum, transaction) => monthSum + (transaction.type === 'deposit' ? transaction.amount : -transaction.amount), 0)
+  }, 0)
+
+  res.json({ success: true, data: { totalSaved, totalSavedThisMonth } })
 })
 
 router.post('/', async (req, res) => {

@@ -31,10 +31,6 @@ function sanitizeMilestones(input: unknown): SanitizedMilestone[] {
     .filter((m): m is SanitizedMilestone => Boolean(m))
 }
 
-function hasMilestoneCosts(milestones: SanitizedMilestone[]) {
-  return milestones.some((m) => m.cost !== undefined)
-}
-
 function getMilestoneCostTotal(milestones: SanitizedMilestone[]) {
   return milestones.reduce((sum, milestone) => sum + (milestone.cost || 0), 0)
 }
@@ -78,7 +74,7 @@ router.post('/', async (req, res) => {
       normalizedMilestones = normalizedMilestones.map((m) => ({ ...m, done: Boolean(completed) }))
     }
     const resolvedCompleted = normalizedMilestones.length > 0 ? normalizedMilestones.every((m) => m.done) : Boolean(completed)
-    const resolvedCost = hasMilestoneCosts(normalizedMilestones) ? getMilestoneCostTotal(normalizedMilestones) : cost
+    const resolvedCost = normalizedMilestones.length > 0 ? getMilestoneCostTotal(normalizedMilestones) : cost
 
     const sidequest = await Sidequest.create({
       userId: new Types.ObjectId(userId),
@@ -154,7 +150,7 @@ router.put('/:id', async (req, res) => {
 
     if (title) sidequest.title = title
     if (description) sidequest.description = description
-    if (nextMilestones.length > 0 && hasMilestoneCosts(nextMilestones)) {
+    if (nextMilestones.length > 0) {
       sidequest.cost = getMilestoneCostTotal(nextMilestones)
     } else if (cost !== undefined) {
       sidequest.cost = cost

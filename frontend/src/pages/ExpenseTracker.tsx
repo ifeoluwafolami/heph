@@ -22,19 +22,10 @@ import {
     type BudgetDto,
     type ExpenseDto,
     type SavingsTargetDto,
-    type SavingsTransactionDto,
 } from "@/lib/api";
 
 // Example data removed — real data is loaded from API and kept in component state
 type OwoTab = "savings" | "spending";
-type LocalSavingsTarget = {
-    _id?: string;
-    id?: string;
-    title: string;
-    targetAmount: number;
-    savedAmount?: number;
-    transactions?: SavingsTransactionDto[];
-};
 type BudgetCategoryItem = {
     _id?: string;
     name: string;
@@ -57,8 +48,6 @@ type BudgetHistory = {
     categories: Array<BudgetDto & { spentAmount: number }>;
 };
 
-const SAVINGS_STORAGE_KEY = "heph_owo_savings_targets";
-const SAVINGS_MIGRATION_KEY = "heph_owo_savings_targets_server_migrated";
 const SAVINGS_TARGETS_PER_PAGE = 4;
 
 function todayKey() {
@@ -79,65 +68,6 @@ function getSavedAmount(target: SavingsTargetDto) {
     return (target.transactions || []).reduce((sum, transaction) => sum + (transaction.type === "deposit" ? transaction.amount : -transaction.amount), 0);
 }
 
-function loadCachedSavingsTargets(): SavingsTargetDto[] {
-    try {
-        const raw = localStorage.getItem(SAVINGS_STORAGE_KEY);
-        const parsed = raw ? (JSON.parse(raw) as LocalSavingsTarget[]) : [];
-        return parsed.map((target) => {
-            const id = target._id || target.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-            const savedAmount = target.savedAmount || 0;
-            return {
-                _id: id,
-                title: target.title,
-                targetAmount: target.targetAmount,
-                transactions: target.transactions || (savedAmount > 0 ? [{ id: `migration-${id}`, type: "deposit" as const, amount: savedAmount, date: todayKey() }] : []),
-            };
-        });
-    } catch {
-        return [];
-    }
-}
-
-function cacheSavingsTargets(targets: SavingsTargetDto[]) {
-    localStorage.setItem(SAVINGS_STORAGE_KEY, JSON.stringify(targets.map((target) => ({
-        id: target._id,
-        title: target.title,
-        targetAmount: target.targetAmount,
-        transactions: target.transactions,
-    }))));
-}
-
-async function getSyncedSavingsTargets() {
-    const cachedTargets = loadCachedSavingsTargets();
-    let remoteTargets: SavingsTargetDto[] = [];
-
-    try {
-        remoteTargets = await getSavingsTargets();
-    } catch {
-        return cachedTargets;
-    }
-
-    const shouldMigrate = !localStorage.getItem(SAVINGS_MIGRATION_KEY) && cachedTargets.length > 0;
-    if (!shouldMigrate) {
-        cacheSavingsTargets(remoteTargets);
-        localStorage.setItem(SAVINGS_MIGRATION_KEY, "true");
-        return remoteTargets;
-    }
-
-    const knownTitles = new Set(remoteTargets.map((target) => target.title.trim().toLowerCase()));
-    const migrated = await Promise.all(cachedTargets
-        .filter((target) => !knownTitles.has(target.title.trim().toLowerCase()))
-        .map((target) => createSavingsTarget({
-            title: target.title,
-            targetAmount: target.targetAmount,
-            transactions: target.transactions || [],
-        })));
-    const nextTargets = [...migrated, ...remoteTargets];
-    cacheSavingsTargets(nextTargets);
-    localStorage.setItem(SAVINGS_MIGRATION_KEY, "true");
-    return nextTargets;
-}
-
 export default function ExpenseTracker() {
     const toast = useToast();
     const [activeTab, setActiveTab] = useState<OwoTab>("savings");
@@ -150,7 +80,7 @@ export default function ExpenseTracker() {
     const [expensesMeta, setExpensesMeta] = useState<{ total?: number; page?: number; limit?: number } | null>(null)
     const [budgetHistoryMonth, setBudgetHistoryMonth] = useState(previousMonthKey)
     const [budgetHistory, setBudgetHistory] = useState<BudgetHistory | null>(null)
-    const [savingsTargets, setSavingsTargets] = useState<SavingsTargetDto[]>(loadCachedSavingsTargets)
+    const [savingsTargets, setSavingsTargets] = useState<SavingsTargetDto[]>([])
     const [savingsTitle, setSavingsTitle] = useState("")
     const [savingsTargetAmount, setSavingsTargetAmount] = useState("")
     const [savingsAmounts, setSavingsAmounts] = useState<Record<string, string>>({})
@@ -170,7 +100,7 @@ export default function ExpenseTracker() {
                 if (!mounted) return
                 setSummary({ totalSpent: s.totalSpent, totalBudgeted: s.totalBudgeted, remaining: s.remaining })
 
-                getSyncedSavingsTargets()
+                getSavingsTargets()
                     .then((savings) => {
                         if (mounted) setSavingsTargets(savings)
                     })
@@ -239,11 +169,7 @@ export default function ExpenseTracker() {
         if (!cleanTitle || !Number.isFinite(cleanAmount) || cleanAmount <= 0) return;
         try {
             const created = await createSavingsTarget({ title: cleanTitle, targetAmount: cleanAmount, transactions: [] });
-            setSavingsTargets((prev) => {
-                const nextTargets = [created, ...prev];
-                cacheSavingsTargets(nextTargets);
-                return nextTargets;
-            });
+            setSavingsTargets((prev) => [created, ...prev]);
             setSavingsTitle("");
             setSavingsTargetAmount("");
             window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
@@ -258,11 +184,7 @@ export default function ExpenseTracker() {
         if (!Number.isFinite(amount) || amount <= 0) return;
         try {
             const updated = await createSavingsTransaction(targetId, { type: direction, amount, date: todayKey() });
-            setSavingsTargets((prev) => {
-                const nextTargets = prev.map((target) => target._id === targetId ? updated : target);
-                cacheSavingsTargets(nextTargets);
-                return nextTargets;
-            });
+            setSavingsTargets((prev) => prev.map((target) => target._id === targetId ? updated : target));
             setSelectedSavingsTarget((target) => target?._id === targetId ? updated : target);
             setSavingsAmounts((prev) => ({ ...prev, [targetId]: "" }));
             window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
@@ -275,11 +197,7 @@ export default function ExpenseTracker() {
     async function deleteSavingsTarget(targetId: string) {
         try {
             await deleteSavingsTargetApi(targetId);
-            setSavingsTargets((prev) => {
-                const nextTargets = prev.filter((target) => target._id !== targetId);
-                cacheSavingsTargets(nextTargets);
-                return nextTargets;
-            });
+            setSavingsTargets((prev) => prev.filter((target) => target._id !== targetId));
             setDeletingSavingsTarget(null);
             setSelectedSavingsTarget(null);
             window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))
@@ -303,11 +221,7 @@ export default function ExpenseTracker() {
         if (!cleanTitle || !Number.isFinite(cleanAmount) || cleanAmount <= 0) return;
         try {
             const updated = await updateSavingsTarget(editingSavingsTarget._id, { title: cleanTitle, targetAmount: cleanAmount });
-            setSavingsTargets((prev) => {
-                const nextTargets = prev.map((target) => target._id === editingSavingsTarget._id ? updated : target);
-                cacheSavingsTargets(nextTargets);
-                return nextTargets;
-            });
+            setSavingsTargets((prev) => prev.map((target) => target._id === editingSavingsTarget._id ? updated : target));
             setSelectedSavingsTarget((target) => target?._id === editingSavingsTarget._id ? updated : target);
             setEditingSavingsTarget(null);
             window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'savings' } }))

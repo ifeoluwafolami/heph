@@ -7,7 +7,7 @@ import path from 'path'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const proxyTarget = env.VITE_PROXY_API_TARGET || 'https://heph-backend.onrender.com'
+  const proxyTarget = env.VITE_PROXY_API_TARGET || 'http://localhost:4000'
 
   return {
     plugins: [
@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
         '/api/v1': {
           target: proxyTarget,
           changeOrigin: true,
-          secure: true,
+          secure: proxyTarget.startsWith('https://'),
         },
       },
     },
@@ -34,7 +34,7 @@ export default defineConfig(({ mode }) => {
         '/api/v1': {
           target: proxyTarget,
           changeOrigin: true,
-          secure: true,
+          secure: proxyTarget.startsWith('https://'),
         },
       },
     },

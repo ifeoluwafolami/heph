@@ -8,6 +8,7 @@ import Ounje from "./pages/Ounje"
 import Odyssey from "./pages/Odyssey"
 import DopamineCalendar from "./pages/DopamineCalendar"
 import TheOne from "./pages/TheOne"
+import Bloom from "./pages/Bloom"
 import { RequireAuth } from "@/lib/auth"
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
         <Route path="/dopamine-calendar" element={<RequireAuth><DopamineCalendar /></RequireAuth>} />
         <Route path="/mementos" element={<RequireAuth><Mementos /></RequireAuth>} />
         <Route path="/ounje" element={<RequireAuth><Ounje /></RequireAuth>} />
+        <Route path="/bloom" element={<RequireAuth><Bloom /></RequireAuth>} />
         <Route path="/odyssey" element={<RequireAuth><Odyssey /></RequireAuth>} />
         <Route path="/the-one" element={<RequireAuth><TheOne /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/login" replace />} />

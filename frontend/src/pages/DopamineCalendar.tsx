@@ -1,4 +1,5 @@
 import Layout from "@/components/Layout";
+import CustomDateInput from "@/components/CustomDateInput";
 import { ModalBody, ModalFooter, ModalFrame, ModalHead } from "@/components/Modal";
 import PaginationControls from "@/components/PaginationControls";
 import { useToast } from "@/components/Toast";
@@ -386,11 +387,9 @@ export default function DopamineCalendar() {
             </div>
             <label className="block space-y-1">
               <span className="text-sm uppercase tracking-widest">Tracking Date</span>
-              <input
-                type="date"
+              <CustomDateInput
                 value={selectedDate}
-                onChange={(event) => setSelectedDate(event.target.value)}
-                className="w-full rounded-xl border border-claret/30 bg-pink px-3 py-2"
+                onChange={(value) => setSelectedDate(value || todayKey())}
               />
             </label>
             <label className="block space-y-1">

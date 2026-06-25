@@ -23,18 +23,29 @@ router.post('/', async (req, res) => {
   const userId = req.auth?.userId
   if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_ERROR' } })
 
-  const { title, servings, caloriesPerServing, notes } = req.body as {
+  const { title, servings, caloriesPerServing, steps, notes, link } = req.body as {
     title: string
     servings: number
     caloriesPerServing: number
+    steps?: string[]
     notes?: string
+    link?: string
   }
 
   if (!title || typeof servings !== 'number' || typeof caloriesPerServing !== 'number') {
     return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'title, servings and caloriesPerServing are required' } })
   }
 
-  const item = new Recipe({ userId: new Types.ObjectId(userId), title, servings, caloriesPerServing, notes: notes || '' })
+  const cleanSteps = Array.isArray(steps) ? steps.map((step) => step.trim()).filter(Boolean) : []
+  const item = new Recipe({
+    userId: new Types.ObjectId(userId),
+    title,
+    servings,
+    caloriesPerServing,
+    steps: cleanSteps,
+    notes: notes || '',
+    link: link || '',
+  })
   await item.save()
   res.status(201).json({ success: true, data: item })
 })
