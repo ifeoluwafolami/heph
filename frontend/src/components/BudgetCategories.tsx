@@ -18,6 +18,7 @@ type BudgetCategory = {
 
 type BudgetCategoriesProps = {
   categories?: BudgetCategory[];
+  expenseDefaultDate?: string;
 };
 
 const defaultCategories: BudgetCategory[] = [
@@ -30,7 +31,7 @@ const defaultCategories: BudgetCategory[] = [
 ];
 const CATEGORIES_PER_PAGE = 6;
 
-export default function BudgetCategories({ categories = defaultCategories }: BudgetCategoriesProps) {
+export default function BudgetCategories({ categories = defaultCategories, expenseDefaultDate }: BudgetCategoriesProps) {
   const [isNewBudgetOpen, setIsNewBudgetOpen] = useState(false);
   const [selectedEditCategory, setSelectedEditCategory] = useState<BudgetCategory | null>(null);
   const [selectedDeleteCategory, setSelectedDeleteCategory] = useState<BudgetCategory | null>(null);
@@ -171,6 +172,7 @@ export default function BudgetCategories({ categories = defaultCategories }: Bud
         onClose={() => setSelectedLogCategory(null)}
         categoryName={selectedLogCategory?.name ?? ""}
         categoryId={selectedLogCategory?._id}
+        defaultDate={expenseDefaultDate}
       />
     </>
   );

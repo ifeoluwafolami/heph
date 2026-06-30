@@ -94,6 +94,23 @@ export type SavingsTargetDto = {
   updatedAt?: string
 }
 
+export type ExtraIncomeDto = {
+  id: string
+  title: string
+  amount: number
+  date: string
+  note?: string
+}
+
+export type MonthlyIncomeDto = {
+  _id: string
+  month: string
+  salary: number
+  extraIncomes: ExtraIncomeDto[]
+  createdAt?: string
+  updatedAt?: string
+}
+
 export type TheOneItemDto = {
   _id: string
   title: string
@@ -387,6 +404,30 @@ export async function deleteSavingsTarget(id: string) {
   })
 }
 
+export async function getMonthlyIncome(month: string) {
+  return request<MonthlyIncomeDto>(`/income?month=${encodeURIComponent(month)}`)
+}
+
+export async function updateMonthlySalary(payload: { month: string; salary: number }) {
+  return request<MonthlyIncomeDto>('/income/salary', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function createExtraIncome(payload: { month: string; title: string; amount: number; date: string; note?: string }) {
+  return request<MonthlyIncomeDto>('/income/extra', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteExtraIncome(month: string, extraId: string) {
+  return request<MonthlyIncomeDto>(`/income/extra/${extraId}?month=${encodeURIComponent(month)}`, {
+    method: 'DELETE',
+  })
+}
+
 export async function getFoodPlanSettings() {
   return request<FoodPlanSettingsDto>('/food-plans/settings')
 }
@@ -482,8 +523,15 @@ export async function getBudgetHistory(month: string) {
   }>(`/budgets/history?month=${encodeURIComponent(month)}`)
 }
 
-export async function getExpenses(limit = 10, page = 1) {
-  return request<ExpenseDto[]>(`/expenses?limit=${limit}&page=${page}`)
+export async function getExpenses(limit = 10, page = 1, filters?: { from?: string; to?: string; categoryId?: string }) {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    page: String(page),
+  })
+  if (filters?.from) params.set('from', filters.from)
+  if (filters?.to) params.set('to', filters.to)
+  if (filters?.categoryId) params.set('categoryId', filters.categoryId)
+  return request<ExpenseDto[]>(`/expenses?${params.toString()}`)
 }
 
 export async function createExpense(payload: {

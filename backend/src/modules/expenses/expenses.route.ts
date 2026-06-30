@@ -43,7 +43,7 @@ router.get('/', async (req, res) => {
   }
 
   const total = await Expense.countDocuments(q)
-  const items = await Expense.find(q).sort({ expenseDate: -1 }).skip(skip).limit(limit).lean()
+  const items = await Expense.find(q).sort({ expenseDate: -1, createdAt: -1 }).skip(skip).limit(limit).lean()
   res.json({ success: true, data: items, meta: { total, page, limit } })
 })
 

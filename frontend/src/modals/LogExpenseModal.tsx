@@ -1,7 +1,7 @@
 import { ModalBody, ModalFooter, ModalFrame, ModalHead } from "@/components/Modal";
 import CustomDateInput from "@/components/CustomDateInput";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createExpense } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
@@ -10,14 +10,27 @@ type LogExpenseModalProps = {
   onClose: () => void;
   categoryName: string;
   categoryId?: string | null;
+  defaultDate?: string;
 };
 
-export default function LogExpenseModal({ open, onClose, categoryName, categoryId }: LogExpenseModalProps) {
+export default function LogExpenseModal({ open, onClose, categoryName, categoryId, defaultDate = "" }: LogExpenseModalProps) {
   const [title, setTitle] = useState("")
   const [amount, setAmount] = useState("")
   const [date, setDate] = useState("")
   const [note, setNote] = useState("")
   const toast = useToast()
+
+  function resetForm() {
+    setTitle("")
+    setAmount("")
+    setDate(defaultDate)
+    setNote("")
+  }
+
+  useEffect(() => {
+    if (open) setDate(defaultDate)
+    else resetForm()
+  }, [defaultDate, open])
 
   if (!open) return null;
 
@@ -35,6 +48,7 @@ export default function LogExpenseModal({ open, onClose, categoryName, categoryI
       await createExpense(payload)
       toast.push({ type: 'success', message: 'Expense logged' })
       window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'expense' } }))
+      resetForm()
       onClose()
     } catch (err) {
       console.error(err)

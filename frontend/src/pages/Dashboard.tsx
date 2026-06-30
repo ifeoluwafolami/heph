@@ -28,8 +28,10 @@ import {
 } from "@/lib/api";
 
 type RecentExpenseItem = {
+    _id?: string
     title: string;
     date: string;
+    dateKey?: string;
     amount: string;
     category?: string | null;
 }
@@ -295,8 +297,10 @@ export default function Dashboard() {
                     const map = new Map<string, string>()
                     budgets.forEach((b: BudgetDto) => map.set(b._id, b.name))
                     setRecentExpenses(expenses.map((e: ExpenseDto) => ({
+                        _id: e._id,
                         title: e.title,
                         date: new Date(e.expenseDate).toLocaleDateString(),
+                        dateKey: e.expenseDate.slice(0, 10),
                         amount: (e.amount || 0).toString(),
                         category: e.categoryId ? map.get(e.categoryId) ?? null : null,
                     })))

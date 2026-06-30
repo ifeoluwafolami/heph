@@ -1,38 +1,45 @@
 import { ModalBody, ModalFooter, ModalFrame, ModalHead } from "@/components/Modal";
 import CustomDateInput from "@/components/CustomDateInput";
 import { Plus } from "lucide-react";
-import { useState, useEffect } from "react";
-import SearchableSelect from "@/components/SearchableSelect";
-import { createExpense, getBudgets, createBudget, getExpenses } from "@/lib/api";
+import { useMemo, useState, useEffect } from "react";
+import { createExpense, getBudgetHistory, getExpenses, type BudgetDto } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
 type NewExpenseModalProps = {
   open: boolean;
   onClose: () => void;
+  defaultDate?: string;
 };
 
-export default function NewExpenseModal({ open, onClose }: NewExpenseModalProps) {
+export default function NewExpenseModal({ open, onClose, defaultDate = "" }: NewExpenseModalProps) {
   const [title, setTitle] = useState("")
   const [amount, setAmount] = useState("")
   const [category, setCategory] = useState("")
   const [date, setDate] = useState("")
   const [note, setNote] = useState("")
-  const [categories, setCategories] = useState<string[]>([])
-  const [budgets, setBudgets] = useState<Array<{ _id: string; name: string }>>([])
+  const [budgets, setBudgets] = useState<Array<BudgetDto & { spentAmount: number }>>([])
   const [savedTitles, setSavedTitles] = useState<string[]>([])
-  const [creatingCategoryName, setCreatingCategoryName] = useState<string | null>(null)
-  const [creatingCategoryBudget, setCreatingCategoryBudget] = useState<string>("")
-  const [creatingCategoryLoading, setCreatingCategoryLoading] = useState(false)
   const toast = useToast()
+  const amountNumber = Number(amount || 0)
+  const selectedBudget = useMemo(() => budgets.find((budget) => budget._id === category) || null, [budgets, category])
+  const categoryWarning = useMemo(() => {
+    if (!selectedBudget) return ""
+    const spent = Number(selectedBudget.spentAmount || 0)
+    const limit = Number(selectedBudget.monthlyBudget || 0)
+    if (limit <= 0) return ""
+    if (spent >= limit) return `${selectedBudget.name} has already hit its monthly limit.`
+    if (amountNumber > 0 && spent + amountNumber > limit) return `This expense will push ${selectedBudget.name} past its monthly limit.`
+    return ""
+  }, [amountNumber, selectedBudget])
+
+  function dateToMonth(dateValue: string) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(dateValue) ? dateValue.slice(0, 7) : new Date().toISOString().slice(0, 7)
+  }
 
   useEffect(() => {
     let mounted = true
     async function load() {
       try {
-        const budgets = await getBudgets()
-        if (!mounted) return
-        setCategories(budgets.map(b => b.name))
-        setBudgets(budgets.map(b => ({ _id: b._id, name: b.name })))
         const expenses = await getExpenses(50, 1)
         if (!mounted) return
         setSavedTitles(Array.from(new Set(expenses.map((expense) => expense.title))).slice(0, 50))
@@ -45,14 +52,33 @@ export default function NewExpenseModal({ open, onClose }: NewExpenseModalProps)
   }, [])
 
   useEffect(() => {
+    if (!open || !date) return
+    let mounted = true
+    getBudgetHistory(dateToMonth(date))
+      .then((history) => {
+        if (!mounted) return
+        setBudgets(history.categories)
+        setCategory((current) => history.categories.some((budget) => budget._id === current) ? current : "")
+      })
+      .catch(() => {
+        if (!mounted) return
+        setBudgets([])
+        setCategory("")
+      })
+    return () => { mounted = false }
+  }, [date, open])
+
+  useEffect(() => {
+    if (open) setDate(defaultDate)
+  }, [defaultDate, open])
+
+  useEffect(() => {
     if (!open) {
       setTitle("")
       setAmount("")
       setCategory("")
       setDate("")
       setNote("")
-      setCreatingCategoryName(null)
-      setCreatingCategoryBudget("")
     }
   }, [open])
 
@@ -63,19 +89,16 @@ export default function NewExpenseModal({ open, onClose }: NewExpenseModalProps)
     if (!title || !amt || !date) return
 
     try {
-      // prefer sending categoryId if we have a matching budget
-      const matched = budgets.find(b => b.name.toLowerCase() === (category || '').toLowerCase())
       const payload: any = { title, amount: amt, expenseDate: date }
       if (note) payload.note = note
-      if (matched) payload.categoryId = matched._id
-      else if (category) payload.categoryName = category
+      if (selectedBudget) payload.categoryId = selectedBudget._id
 
       await createExpense(payload)
 
       setSavedTitles((prev) => Array.from(new Set([title, ...prev])).slice(0, 50))
       toast.push({ type: 'success', message: 'Expense created' })
       // notify app to refetch lists
-      window.dispatchEvent(new CustomEvent('heph:expense:created', { detail: { expense: { title, amount: amt, category: matched?._id ?? null } } }))
+      window.dispatchEvent(new CustomEvent('heph:expense:created', { detail: { expense: { title, amount: amt, category: selectedBudget?._id ?? null } } }))
       onClose()
     } catch (err) {
       console.error(err)
@@ -101,74 +124,23 @@ export default function NewExpenseModal({ open, onClose }: NewExpenseModalProps)
           </label>
           <label className="space-y-1">
             <span className="text-sm uppercase tracking-widest">Category</span>
-              <SearchableSelect
-                options={categories}
-                value={category}
-                onChange={(v) => setCategory(v)}
-                onCreateOption={async (v) => {
-                  // open inline prompt to ask for monthly budget for the new category
-                  setCreatingCategoryName(v)
-                  setCreatingCategoryBudget("")
-                }}
-                placeholder="e.g. Utilities"
-              />
-              {creatingCategoryName && (
-                <div className="mt-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <input value={creatingCategoryName} readOnly className="flex-1 rounded-xl border border-claret/30 bg-pink px-3 py-2" />
-                    <input value={creatingCategoryBudget} onChange={(e) => setCreatingCategoryBudget(e.target.value)} placeholder="monthly budget" className="w-36 rounded-xl border border-claret/30 bg-pink px-3 py-2" />
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      disabled={creatingCategoryLoading}
-                      onClick={async () => {
-                        if (!creatingCategoryName) return
-                        setCreatingCategoryLoading(true)
-                        try {
-                          const mb = Number(creatingCategoryBudget) || 0
-                          const result = await createBudget({ name: creatingCategoryName, monthlyBudget: mb })
-                          // backend upserts and returns existing or created doc
-                          setCategory(result.name)
-                          const refreshed = await getBudgets()
-                          setCategories(refreshed.map((b: any) => b.name))
-                          toast.push({ type: 'success', message: `Category "${result.name}" ready` })
-                        } catch (err: any) {
-                          console.error(err)
-                          // duplicate key or other conflict -> try to fetch existing and use it
-                          try {
-                            const refreshed = await getBudgets()
-                            setCategories(refreshed.map((b: any) => b.name))
-                            const found = refreshed.find((b: any) => b.name.toLowerCase() === creatingCategoryName.toLowerCase())
-                            if (found) {
-                              setCategory(found.name)
-                              toast.push({ type: 'info', message: `Category "${found.name}" already exists` })
-                            } else {
-                              toast.push({ type: 'error', message: 'Failed to create category' })
-                            }
-                          } catch (e) {
-                            toast.push({ type: 'error', message: 'Failed to create category' })
-                          }
-                        } finally {
-                          setCreatingCategoryLoading(false)
-                          setCreatingCategoryName(null)
-                          setCreatingCategoryBudget("")
-                        }
-                      }}
-                      className="inline-flex items-center gap-2 rounded-2xl border border-claret bg-claret px-4 py-2 text-sm uppercase tracking-widest text-pink hover:bg-claret/90 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      Create
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setCreatingCategoryName(null); setCreatingCategoryBudget("") }}
-                      className="inline-flex items-center gap-2 rounded-2xl border border-claret bg-transparent px-3 py-2 text-sm uppercase tracking-widest text-claret hover:bg-pink/5"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
+            <select
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+              className="w-full rounded-xl border border-claret/30 bg-pink px-3 py-2"
+            >
+              <option value="">Choose a category</option>
+              {budgets.map((budget) => (
+                <option key={budget._id} value={budget._id}>
+                  {budget.name}
+                </option>
+              ))}
+            </select>
+            {categoryWarning ? (
+              <p className="rounded-xl border border-claret/30 bg-claret/10 px-3 py-2 text-sm tracking-normal">
+                {categoryWarning} You can still save this expense.
+              </p>
+            ) : null}
           </label>
           <label className="space-y-1">
             <span className="text-sm uppercase tracking-widest">Date</span>

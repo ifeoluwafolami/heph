@@ -9,6 +9,7 @@ type ExpenseItem = {
   _id?: string;
   title: string;
   date: string;
+  dateKey?: string;
   amount: string;
   category?: string | null;
 };
@@ -18,6 +19,8 @@ type RecentExpensesProps = {
   title?: string;
   showActions?: boolean;
   actionLabel?: string;
+  expenseFilters?: { from?: string; to?: string; categoryId?: string };
+  previewLimit?: number;
 };
 
 const defaultExpenses: ExpenseItem[] = [
@@ -32,11 +35,14 @@ export default function RecentExpenses({
   title = "Recent Expenses",
   showActions = false,
   actionLabel = "View all",
+  expenseFilters,
+  previewLimit = 6,
 }: RecentExpensesProps) {
   const [isViewAllOpen, setIsViewAllOpen] = useState(false);
   const [selectedExpenseForEdit, setSelectedExpenseForEdit] = useState<ExpenseItem | null>(null);
   const [selectedExpenseForDelete, setSelectedExpenseForDelete] = useState<ExpenseItem | null>(null);
   const toast = useToast()
+  const previewExpenses = expenses.slice(0, previewLimit)
 
   return (
     <>
@@ -53,7 +59,7 @@ export default function RecentExpenses({
         </div>
 
       <div className="flex flex-col gap-3">
-        {expenses.map((expense) => (
+        {previewExpenses.map((expense) => (
           <div
             key={expense._id ?? `${expense.title}-${expense.date}`}
             className="rounded-xl border border-claret/30 p-4 bg-claret/95 text-pink flex items-center justify-between"
@@ -95,7 +101,13 @@ export default function RecentExpenses({
         </div>
       </section>
 
-      <ViewAllExpensesModal open={isViewAllOpen} onClose={() => setIsViewAllOpen(false)} expenses={expenses} />
+      <ViewAllExpensesModal
+        open={isViewAllOpen}
+        onClose={() => setIsViewAllOpen(false)}
+        expenses={expenses}
+        filters={expenseFilters}
+        title={title}
+      />
       <EditRecentExpenseModal
         open={Boolean(selectedExpenseForEdit)}
         onClose={() => setSelectedExpenseForEdit(null)}

@@ -16,6 +16,7 @@ import savingsRouter from './modules/savings/savings.route'
 import theOneRouter from './modules/the-one/theOne.route'
 import foodPlansRouter from './modules/food-plans/foodPlans.route'
 import bloomRouter from './modules/bloom/bloom.route'
+import incomeRouter from './modules/income/income.route'
 
 dotenv.config()
 
@@ -56,6 +57,7 @@ app.use('/api/v1/savings', savingsRouter)
 app.use('/api/v1/the-one', theOneRouter)
 app.use('/api/v1/food-plans', foodPlansRouter)
 app.use('/api/v1/bloom', bloomRouter)
+app.use('/api/v1/income', incomeRouter)
 
 app.get('/', (_req, res) => {
   res.send({ success: true, data: { message: 'Heph backend running' } })

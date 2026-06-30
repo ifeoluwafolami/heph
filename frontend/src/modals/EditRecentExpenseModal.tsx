@@ -9,6 +9,7 @@ type ExpenseItem = {
   _id?: string;
   title: string;
   date: string;
+  dateKey?: string;
   amount: string;
 };
 
@@ -52,7 +53,7 @@ const toDateValue = (input: string) => {
 export default function EditRecentExpenseModal({ open, onClose, expense }: EditRecentExpenseModalProps) {
   const [title, setTitle] = useState(expense?.title ?? "");
   const [amount, setAmount] = useState(expense?.amount ?? "");
-  const [dateValue, setDateValue] = useState(toDateValue(expense?.date ?? ""));
+  const [dateValue, setDateValue] = useState(expense?.dateKey ?? toDateValue(expense?.date ?? ""));
   const toast = useToast()
 
   // sync when expense prop changes
@@ -60,7 +61,7 @@ export default function EditRecentExpenseModal({ open, onClose, expense }: EditR
     if (!expense) return
     setTitle(expense.title)
     setAmount(expense.amount)
-    setDateValue(toDateValue(expense.date))
+    setDateValue(expense.dateKey ?? toDateValue(expense.date))
   }, [expense])
 
   if (!open || !expense) return null;
@@ -77,6 +78,10 @@ export default function EditRecentExpenseModal({ open, onClose, expense }: EditR
     const id = expense?._id
     if (!id) return;
     const amt = Number(amount || 0);
+    if (!dateValue) {
+      toast.push({ type: 'error', message: 'Choose a valid date' })
+      return;
+    }
     try {
       await updateExpense(id, { title, amount: amt, expenseDate: dateValue });
       toast.push({ type: 'success', message: 'Expense updated' })
