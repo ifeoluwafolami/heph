@@ -3,6 +3,7 @@ import { Schema, model, Types } from 'mongoose'
 const HabitSchema = new Schema(
   {
     userId: { type: Types.ObjectId, ref: 'User', required: true },
+    goalId: { type: Types.ObjectId, ref: 'Goal', default: null },
     title: { type: String, required: true },
     frequency: { type: String, enum: ['daily', 'weekly', 'monthly'], required: true, default: 'daily' },
     target: { type: Number, required: true, default: 1 },

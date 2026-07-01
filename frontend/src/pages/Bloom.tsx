@@ -312,7 +312,7 @@ export default function Bloom() {
                 <Bell className="size-5" />
                 <h2 className="text-2xl font-bold uppercase">Upcoming</h2>
               </div>
-              <div className="mt-4 space-y-2">
+              <div className="hide-scrollbar mt-4 h-72 space-y-2 overflow-y-auto pr-1">
                 {upcomingPlans.length ? upcomingPlans.map((plan) => (
                   <div key={plan._id} className="rounded-xl border border-claret/30 p-3">
                     <p className="text-sm uppercase tracking-widest opacity-75">{new Date(`${plan.date}T00:00:00`).toLocaleDateString("en-NG", { weekday: "short", month: "short", day: "numeric" })}</p>

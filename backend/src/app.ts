@@ -11,6 +11,7 @@ import recipesRouter from './modules/recipes/recipes.route'
 import weightsRouter from './modules/weights/weights.route'
 import sidequestsRouter from './modules/sidequests/sidequests.route'
 import dashboardRouter from './modules/dashboard/dashboard.route'
+import goalsRouter from './modules/goals/goals.route'
 import habitsRouter from './modules/habits/habits.route'
 import savingsRouter from './modules/savings/savings.route'
 import theOneRouter from './modules/the-one/theOne.route'
@@ -52,6 +53,7 @@ app.use('/api/v1/recipes', recipesRouter)
 app.use('/api/v1/weights', weightsRouter)
 app.use('/api/v1/sidequests', sidequestsRouter)
 app.use('/api/v1/dashboard', dashboardRouter)
+app.use('/api/v1/goals', goalsRouter)
 app.use('/api/v1/habits', habitsRouter)
 app.use('/api/v1/savings', savingsRouter)
 app.use('/api/v1/the-one', theOneRouter)

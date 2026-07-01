@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { Types } from 'mongoose'
 import { requireAuth } from '../../middleware/auth.middleware'
+import { Goal } from '../goals/goal.model'
 import { Habit } from './habit.model'
 
 type HabitFrequency = 'daily' | 'weekly' | 'monthly'
@@ -26,6 +27,14 @@ function normalizeLogs(input: unknown) {
   return Array.from(new Set(input.map(String).filter((date) => dateKeyPattern.test(date))))
 }
 
+async function normalizeGoalId(input: unknown, userId: string) {
+  const value = String(input || '').trim()
+  if (!value) return null
+  if (!Types.ObjectId.isValid(value)) return null
+  const goal = await Goal.findOne({ _id: value, userId: new Types.ObjectId(userId) }).select('_id').lean()
+  return goal ? new Types.ObjectId(value) : null
+}
+
 router.get('/', async (req, res) => {
   const userId = req.auth?.userId
   if (!userId) return res.status(401).json({ success: false, error: { code: 'AUTH_ERROR' } })
@@ -46,6 +55,7 @@ router.post('/', async (req, res) => {
   const frequency = normalizeFrequency(req.body?.frequency)
   const item = new Habit({
     userId: new Types.ObjectId(userId),
+    goalId: await normalizeGoalId(req.body?.goalId, userId),
     title,
     frequency,
     target: normalizeTarget(frequency, req.body?.target),
@@ -63,7 +73,7 @@ router.put('/:id', async (req, res) => {
   if (!Types.ObjectId.isValid(id)) return res.status(400).json({ success: false, error: { code: 'INVALID_ID' } })
 
   const body = req.body || {}
-  const update: Partial<{ title: string; frequency: HabitFrequency; target: number; logs: string[] }> = {}
+  const update: Partial<{ title: string; frequency: HabitFrequency; target: number; logs: string[]; goalId: Types.ObjectId | null }> = {}
   if ('title' in body) {
     const title = String(body.title || '').trim()
     if (!title) return res.status(400).json({ success: false, error: { code: 'VALIDATION', message: 'title is required' } })
@@ -77,6 +87,7 @@ router.put('/:id', async (req, res) => {
   update.frequency = frequency
   if ('target' in body || 'frequency' in body) update.target = normalizeTarget(frequency, body.target ?? current.target)
   if ('logs' in body) update.logs = normalizeLogs(body.logs)
+  if ('goalId' in body) update.goalId = await normalizeGoalId(body.goalId, userId)
 
   const item = await Habit.findOneAndUpdate({ _id: id, userId: new Types.ObjectId(userId) }, update, { new: true }).lean()
   res.json({ success: true, data: item })

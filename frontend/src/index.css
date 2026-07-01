@@ -26,3 +26,14 @@ input:-webkit-autofill:focus {
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+.no-number-spinner {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.no-number-spinner::-webkit-outer-spin-button,
+.no-number-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

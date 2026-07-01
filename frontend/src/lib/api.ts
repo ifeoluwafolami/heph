@@ -70,10 +70,23 @@ export type HabitFrequency = 'daily' | 'weekly' | 'monthly'
 
 export type HabitDto = {
   _id: string
+  goalId?: string | null
   title: string
   frequency: HabitFrequency
   target: number
   logs: string[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type GoalStatus = 'active' | 'completed' | 'paused'
+
+export type GoalDto = {
+  _id: string
+  title: string
+  description?: string
+  status: GoalStatus
+  targetDate?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -342,14 +355,38 @@ export async function getHabits() {
   return request<HabitDto[]>('/habits')
 }
 
-export async function createHabit(payload: { title: string; frequency: HabitFrequency; target: number; logs?: string[] }) {
+export async function getGoals() {
+  return request<GoalDto[]>('/goals')
+}
+
+export async function createGoal(payload: { title: string; description?: string; status?: GoalStatus; targetDate?: string }) {
+  return request<GoalDto>('/goals', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateGoal(id: string, payload: Partial<{ title: string; description: string; status: GoalStatus; targetDate: string }>) {
+  return request<GoalDto>(`/goals/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteGoal(id: string) {
+  return request<{ id: string }>(`/goals/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function createHabit(payload: { title: string; frequency: HabitFrequency; target: number; goalId?: string | null; logs?: string[] }) {
   return request<HabitDto>('/habits', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
 }
 
-export async function updateHabit(id: string, payload: Partial<{ title: string; frequency: HabitFrequency; target: number; logs: string[] }>) {
+export async function updateHabit(id: string, payload: Partial<{ title: string; frequency: HabitFrequency; target: number; goalId: string | null; logs: string[] }>) {
   return request<HabitDto>(`/habits/${id}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
