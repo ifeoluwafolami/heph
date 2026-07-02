@@ -48,7 +48,7 @@ function isCompletedSidequest(sq: SidequestDto): boolean {
 function getSidequestStatus(sq: SidequestDto): 'Queued' | 'Ongoing' | 'Completed' {
   if (isCompletedSidequest(sq)) return 'Completed'
   const milestones = normalizeMilestones((sq as any).milestones)
-  if (milestones.length === 0) return 'Queued'
+  if (milestones.length === 0) return 'Ongoing'
   const doneCount = milestones.filter((m) => m.done).length
   return doneCount === 0 ? 'Queued' : 'Ongoing'
 }
@@ -91,7 +91,7 @@ export default function Odyssey() {
   const queuedSidequests = allSidequests.filter((sq) => {
     if (isCompletedSidequest(sq)) return false
     const milestones = normalizeMilestones((sq as any).milestones)
-    if (milestones.length === 0) return true // non-milestone unfinished quests are queued
+    if (milestones.length === 0) return false
     const doneCount = milestones.filter((m) => m.done).length
     return doneCount === 0
   })
@@ -356,18 +356,22 @@ export default function Odyssey() {
         </div>
 
         {/* Stats */}
-        <section className="my-6 flex flex-wrap justify-center gap-4">
-          <article className="w-[calc((100%-1rem)/2)] md:w-[calc((100%-2rem)/3)] rounded-2xl border border-claret/20 bg-pink p-6 md:p-8 text-claret shadow-xl">
+        <section className="my-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <article className="rounded-2xl border border-claret/20 bg-pink p-6 md:p-8 text-claret shadow-xl">
             <p className="text-3xl md:text-4xl font-bold">{totalCount}</p>
             <p className="mt-2 text-base md:text-xl uppercase tracking-wider opacity-80">Total Sidequests</p>
           </article>
-          <article className="w-[calc((100%-1rem)/2)] md:w-[calc((100%-2rem)/3)] rounded-2xl border border-claret/20 bg-pink p-6 md:p-8 text-claret shadow-xl">
+          <article className="rounded-2xl border border-claret/20 bg-pink p-6 md:p-8 text-claret shadow-xl">
+            <p className="text-3xl md:text-4xl font-bold">{ongoingSidequests.length}</p>
+            <p className="mt-2 text-base md:text-xl uppercase tracking-wider opacity-80">Ongoing</p>
+          </article>
+          <article className="rounded-2xl border border-claret/20 bg-pink p-6 md:p-8 text-claret shadow-xl">
+            <p className="text-3xl md:text-4xl font-bold">{queuedSidequests.length}</p>
+            <p className="mt-2 text-base md:text-xl uppercase tracking-wider opacity-80">Queued</p>
+          </article>
+          <article className="rounded-2xl border border-claret/20 bg-pink p-6 md:p-8 text-claret shadow-xl">
             <p className="text-3xl md:text-4xl font-bold">{completedCount}</p>
             <p className="mt-2 text-base md:text-xl uppercase tracking-wider opacity-80">Completed</p>
-          </article>
-          <article className="w-full md:w-[calc((100%-2rem)/3)] rounded-2xl border border-claret/20 bg-pink p-6 md:p-8 text-claret shadow-xl">
-            <p className="text-3xl md:text-4xl font-bold">{totalCount - completedCount}</p>
-            <p className="mt-2 text-base md:text-xl uppercase tracking-wider opacity-80">Remaining</p>
           </article>
         </section>
 

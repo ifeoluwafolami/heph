@@ -3,26 +3,25 @@ import PaginationControls from "@/components/PaginationControls";
 import RecentExpenses from "@/components/RecentExpenses";
 import RecentMementos from "@/components/RecentMementos";
 import { useToast } from "@/components/Toast";
-import { Check, ChevronLeft, ChevronRight, Circle } from "lucide-react";
+import { Bell, Check, ChevronLeft, ChevronRight, Circle, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
     createHabit,
-    getDashboardOverview,
     getRecentDashboardExpenses,
     getRecentDashboardMementos,
     getBudgets,
+    getBloomPlans,
     getHabits,
     getRecipes,
-    getSavingsTargets,
     getSidequests,
     getWeights,
     toggleHabitLog,
     type BudgetDto,
+    type BloomPlanDto,
     type ExpenseDto,
     type HabitDto,
     type HabitFrequency,
     type MementoDto,
-    type SavingsTargetDto,
     type SidequestDto,
     type WeightDto,
 } from "@/lib/api";
@@ -36,10 +35,12 @@ type RecentExpenseItem = {
     category?: string | null;
 }
 type LocalHabit = { id: string; title: string; frequency: HabitFrequency; target: number; logs: string[] }
+type UiMilestone = { id: string; title: string; done: boolean; cost?: number }
 
 const HABITS_STORAGE_KEY = "heph_dopamine_calendar"
 const HABITS_MIGRATION_KEY = "heph_dopamine_calendar_server_migrated"
 const DASHBOARD_HABITS_PER_PAGE = 6
+const OVERVIEW_SIDEQUESTS_PER_PAGE = 6
 
 function todayKey() {
     return new Date().toISOString().slice(0, 10)
@@ -51,6 +52,13 @@ function monthKey(dateKey = todayKey()) {
 
 function parseDateKey(dateKey: string) {
     return new Date(`${dateKey}T00:00:00`)
+}
+
+function formatDateKey(date: Date) {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
 }
 
 function toDateKey(date: Date) {
@@ -94,12 +102,6 @@ function getFrequencyLabel(habit: HabitDto) {
     return `${habit.target} Times ${habit.frequency === "weekly" ? "Weekly" : "Monthly"}`
 }
 
-function getSavedAmount(target: SavingsTargetDto) {
-    return (target.transactions || []).reduce((sum, transaction) => (
-        sum + (transaction.type === "deposit" ? transaction.amount : -transaction.amount)
-    ), 0)
-}
-
 function getDaysInMonth(dateKey = todayKey()) {
     const date = parseDateKey(dateKey)
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
@@ -129,18 +131,45 @@ function getMetaTotal<T>(items: T[], fallback = items.length) {
     return ((items as T[] & { _meta?: { total?: number } })._meta?.total) ?? fallback
 }
 
+function normalizeMilestones(raw: unknown): UiMilestone[] {
+    if (!Array.isArray(raw)) return []
+    return raw.reduce<UiMilestone[]>((items, item, index) => {
+        const milestone = item as Partial<UiMilestone> & { name?: string; text?: string }
+        const title = String(milestone?.title ?? milestone?.name ?? milestone?.text ?? '').trim()
+        if (!title) return items
+        items.push({
+            id: String(milestone?.id ?? `ms-${index}-${title}`),
+            title,
+            done: Boolean(milestone?.done),
+            cost: milestone?.cost === undefined ? undefined : Math.max(0, Number(milestone.cost) || 0),
+        })
+        return items
+    }, [])
+}
+
 function isCompletedSidequest(sidequest: SidequestDto) {
-    const milestones = sidequest.milestones || []
+    const milestones = normalizeMilestones(sidequest.milestones)
     if (milestones.length > 0) return milestones.every((milestone) => milestone.done)
     return Boolean(sidequest.completed)
 }
 
 function isOngoingSidequest(sidequest: SidequestDto) {
     if (isCompletedSidequest(sidequest)) return false
-    const milestones = sidequest.milestones || []
-    if (milestones.length === 0) return !sidequest.completed
+    const milestones = normalizeMilestones(sidequest.milestones)
+    if (milestones.length === 0) return true
     const done = milestones.filter((milestone) => milestone.done).length
     return done > 0
+}
+
+function getSidequestStatus(sidequest: SidequestDto) {
+    if (isCompletedSidequest(sidequest)) return "Completed"
+    return isOngoingSidequest(sidequest) ? "Ongoing" : "Queued"
+}
+
+function getDisplayedCost(sidequest: SidequestDto) {
+    const milestones = normalizeMilestones(sidequest.milestones)
+    const hasMilestoneCosts = milestones.some((milestone) => milestone.cost !== undefined)
+    return hasMilestoneCosts ? milestones.reduce((sum, milestone) => sum + (milestone.cost || 0), 0) : sidequest.cost
 }
 
 function loadCachedHabits(): HabitDto[] {
@@ -234,38 +263,23 @@ export default function Dashboard() {
         return () => window.clearInterval(id);
     }, []);
 
-    const [summary, setSummary] = useState<{ totalSpent: number; totalBudgeted: number; mementosAdded: number; weightProgressKg: number; newRecipes: number; totalSidequests: number }>({ totalSpent: 0, totalBudgeted: 0, mementosAdded: 0, weightProgressKg: 0, newRecipes: 0, totalSidequests: 0 })
     const [recentExpenses, setRecentExpenses] = useState<RecentExpenseItem[]>([])
     const [recentMementos, setRecentMementos] = useState<MementoDto[]>([])
-    const [totalSavedThisMonth, setTotalSavedThisMonth] = useState(0)
-    const [savingsOverviewTargets, setSavingsOverviewTargets] = useState<SavingsTargetDto[]>([])
     const [recipesTotal, setRecipesTotal] = useState(0)
     const [weightEntries, setWeightEntries] = useState<WeightDto[]>([])
     const [sidequests, setSidequests] = useState<SidequestDto[]>([])
+    const [bloomPlans, setBloomPlans] = useState<BloomPlanDto[]>([])
+    const [selectedBloomPlan, setSelectedBloomPlan] = useState<BloomPlanDto | null>(null)
+    const [selectedSidequest, setSelectedSidequest] = useState<SidequestDto | null>(null)
     const [overviewSlide, setOverviewSlide] = useState(0)
     const [overviewTouchStartX, setOverviewTouchStartX] = useState<number | null>(null)
+    const [sidequestOverviewPage, setSidequestOverviewPage] = useState(1)
     const [habits, setHabits] = useState<HabitDto[]>([])
     const [habitsPage, setHabitsPage] = useState(1)
-
-    async function loadLocalOverview() {
-        const savings = await getSavingsTargets()
-        setSavingsOverviewTargets(savings)
-        const saved = savings.reduce((sum, target) => {
-            const transactions = target.transactions || []
-            return sum + transactions
-                .filter((transaction) => monthKey(transaction.date) === monthKey())
-                .reduce((targetSum, transaction) => (
-                    targetSum + (transaction.type === "deposit" ? transaction.amount : -transaction.amount)
-                ), 0)
-        }, 0)
-        setTotalSavedThisMonth(saved)
-    }
 
     useEffect(() => {
         let mounted = true
         async function load() {
-            loadLocalOverview().catch(() => setTotalSavedThisMonth(0))
-
             getSyncedHabits()
                 .then((items) => {
                     if (mounted) setHabits(items)
@@ -273,20 +287,6 @@ export default function Dashboard() {
                 .catch(() => {
                     if (mounted) setHabits(loadCachedHabits())
                 })
-
-            getDashboardOverview()
-                .then((overview) => {
-                    if (!mounted) return
-                    setSummary({
-                        totalSpent: overview.totalSpent,
-                        totalBudgeted: overview.totalBudgeted,
-                        mementosAdded: overview.mementosAdded,
-                        weightProgressKg: overview.weightProgressKg,
-                        newRecipes: overview.totalRecipes ?? overview.newRecipes,
-                        totalSidequests: overview.totalSidequests ?? 0,
-                    })
-                })
-                .catch(() => {})
 
             Promise.all([
                 getRecentDashboardExpenses(10),
@@ -317,11 +317,13 @@ export default function Dashboard() {
                 getRecipes(1, 1).catch(() => []),
                 getWeights(12, 1).catch(() => [] as WeightDto[]),
                 getSidequests(1000, 1).catch(() => [] as SidequestDto[]),
-            ]).then(([recipes, weights, sidequestItems]) => {
+                getBloomPlans(todayKey(), formatDateKey(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000))).catch(() => [] as BloomPlanDto[]),
+            ]).then(([recipes, weights, sidequestItems, bloomItems]) => {
                 if (!mounted) return
                 setRecipesTotal(getMetaTotal(recipes, recipes.length))
                 setWeightEntries(weights)
                 setSidequests(sidequestItems)
+                setBloomPlans(bloomItems)
             }).catch(() => {})
         }
 
@@ -334,7 +336,8 @@ export default function Dashboard() {
             }
             window.addEventListener('heph:expense:created', handler as EventListener)
             window.addEventListener('heph:data:changed', dataHandler as EventListener)
-                return () => { mounted = false; window.removeEventListener('heph:expense:created', handler as EventListener); window.removeEventListener('heph:data:changed', dataHandler as EventListener) }
+            window.addEventListener('heph:bloom:changed', handler as EventListener)
+                return () => { mounted = false; window.removeEventListener('heph:expense:created', handler as EventListener); window.removeEventListener('heph:data:changed', dataHandler as EventListener); window.removeEventListener('heph:bloom:changed', handler as EventListener) }
     }, [])
 
     async function toggleHabitForToday(habitId: string) {
@@ -368,8 +371,6 @@ export default function Dashboard() {
     }, [habitsTotalPages])
 
     const overviewStats = useMemo(() => {
-        const totalSavingsTarget = savingsOverviewTargets.reduce((sum, target) => sum + target.targetAmount, 0)
-        const totalSaved = savingsOverviewTargets.reduce((sum, target) => sum + getSavedAmount(target), 0)
         const monthlyHabitDone = habits.reduce((sum, habit) => sum + getMonthlyHabitDone(habit), 0)
         const monthlyHabitTarget = habits.reduce((sum, habit) => sum + getMonthlyHabitTarget(habit), 0)
         const monthlyHitHabits = habits
@@ -381,24 +382,27 @@ export default function Dashboard() {
             .filter((item) => item.done > 0)
             .sort((a, b) => b.done - a.done)
         const ongoingSidequests = sidequests.filter(isOngoingSidequest).slice(0, 3)
+        const queuedSidequests = sidequests.filter((sidequest) => getSidequestStatus(sidequest) === "Queued")
+        const completedSidequests = sidequests.filter(isCompletedSidequest)
+        const upcomingBloomPlans = [...bloomPlans].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5)
         const sortedWeights = [...weightEntries].sort((a, b) => new Date(a.entryDate).getTime() - new Date(b.entryDate).getTime())
         const firstWeight = sortedWeights[0]?.weightKg ?? 0
         const latestWeight = sortedWeights[sortedWeights.length - 1]?.weightKg ?? firstWeight
         const weightDelta = Number((latestWeight - firstWeight).toFixed(1))
 
         return {
-            totalSavingsTarget,
-            totalSaved,
-            savingsPercent: totalSavingsTarget > 0 ? Math.round((totalSaved / totalSavingsTarget) * 100) : 0,
             monthlyHabitDone,
             monthlyHabitTarget,
             monthlyHabitPercent: monthlyHabitTarget > 0 ? Math.round((monthlyHabitDone / monthlyHabitTarget) * 100) : 0,
             monthlyHitHabits,
             ongoingSidequests,
+            queuedSidequests,
+            completedSidequests,
+            upcomingBloomPlans,
             sortedWeights,
             weightDelta,
         }
-    }, [habits, savingsOverviewTargets, sidequests, weightEntries])
+    }, [bloomPlans, habits, sidequests, weightEntries])
 
     const weightChartPoints = useMemo(() => {
         const values = overviewStats.sortedWeights.map((entry) => entry.weightKg)
@@ -414,40 +418,15 @@ export default function Dashboard() {
         }).join(" ")
     }, [overviewStats.sortedWeights])
 
+    const sidequestOverviewTotalPages = Math.max(1, Math.ceil(sidequests.length / OVERVIEW_SIDEQUESTS_PER_PAGE))
+    const safeSidequestOverviewPage = Math.min(sidequestOverviewPage, sidequestOverviewTotalPages)
+    const overviewSidequests = sidequests.slice((safeSidequestOverviewPage - 1) * OVERVIEW_SIDEQUESTS_PER_PAGE, safeSidequestOverviewPage * OVERVIEW_SIDEQUESTS_PER_PAGE)
+
+    useEffect(() => {
+        setSidequestOverviewPage((page) => Math.min(page, sidequestOverviewTotalPages))
+    }, [sidequestOverviewTotalPages])
+
     const overviewSlides = [
-        {
-            title: "OWO",
-            to: "/owo",
-            content: (
-                <>
-                    <div className="rounded-xl border border-claret/20 p-5">
-                        <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
-                            <div>
-                                <p className="text-sm uppercase tracking-widest opacity-75">Saved / Savings Target</p>
-                                <p className="mt-1 text-4xl font-bold">
-                                    N{overviewStats.totalSaved.toLocaleString()}
-                                    <span className="text-xl font-bold opacity-75"> / N{overviewStats.totalSavingsTarget.toLocaleString()}</span>
-                                </p>
-                            </div>
-                            <p className="text-sm uppercase tracking-widest opacity-75">{overviewStats.savingsPercent}%</p>
-                        </div>
-                        <div className="mt-5 h-3 overflow-hidden rounded-full bg-claret/20">
-                            <div className="h-full rounded-full bg-claret" style={{ width: `${Math.min(100, overviewStats.savingsPercent)}%` }} />
-                        </div>
-                    </div>
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <div className="rounded-xl border border-claret/20 p-4">
-                            <p className="text-sm uppercase tracking-widest opacity-75">Saved This Month</p>
-                            <p className="mt-1 text-3xl font-bold">N{totalSavedThisMonth.toLocaleString()}</p>
-                        </div>
-                        <div className="rounded-xl border border-claret/20 p-4">
-                            <p className="text-sm uppercase tracking-widest opacity-75">Spent This Month</p>
-                            <p className="mt-1 text-3xl font-bold">N{summary.totalSpent.toLocaleString()}</p>
-                        </div>
-                    </div>
-                </>
-            ),
-        },
         {
             title: "Dopamine Calendar",
             to: "/dopamine-calendar",
@@ -478,6 +457,40 @@ export default function Dashboard() {
             ),
         },
         {
+            title: "Bloom",
+            to: "/bloom",
+            content: (
+                <>
+                    <div className="flex items-center gap-2">
+                        <Bell className="size-5" />
+                        <p className="text-sm uppercase tracking-widest opacity-75">Upcoming Plans</p>
+                    </div>
+                    <div className="mt-4 grid gap-2 md:grid-cols-2">
+                        {overviewStats.upcomingBloomPlans.length > 0 ? overviewStats.upcomingBloomPlans.map((plan) => (
+                            <button
+                                key={plan._id}
+                                type="button"
+                                onClick={() => setSelectedBloomPlan(plan)}
+                                className="rounded-xl border border-claret/20 p-3 text-left transition-colors hover:bg-claret hover:text-pink"
+                            >
+                                <span className="flex items-start gap-3">
+                                    <span className="mt-1 size-3 shrink-0 rounded-full" style={{ backgroundColor: plan.color }} />
+                                    <span>
+                                        <span className="block text-sm uppercase tracking-widest opacity-75">
+                                            {parseDateKey(plan.date).toLocaleDateString("en-NG", { weekday: "short", month: "short", day: "numeric" })}
+                                        </span>
+                                        <span className="mt-1 block text-xl font-bold leading-tight">{plan.title}</span>
+                                    </span>
+                                </span>
+                            </button>
+                        )) : (
+                            <p className="rounded-xl border border-dashed border-claret/30 p-4 text-lg">No upcoming Bloom plans.</p>
+                        )}
+                    </div>
+                </>
+            ),
+        },
+        {
             title: "Ounje",
             to: "/ounje",
             content: (
@@ -502,16 +515,40 @@ export default function Dashboard() {
             to: "/odyssey",
             content: (
                 <>
-                    <p className="text-sm uppercase tracking-widest opacity-75">Total Sidequests</p>
-                    <p className="mt-1 text-4xl font-bold">{sidequests.length}</p>
-                    <div className="mt-4 grid gap-2 md:grid-cols-3">
-                        {overviewStats.ongoingSidequests.length > 0 ? overviewStats.ongoingSidequests.map((sidequest) => (
-                            <div key={sidequest._id} className="rounded-xl border border-claret/20 p-3">
-                                <p className="text-xl font-bold">{sidequest.title}</p>
-                                <p className="mt-1 text-xs uppercase tracking-widest opacity-75">Ongoing</p>
+                    <div className="grid gap-2 md:grid-cols-4">
+                        {[
+                            ["Total", sidequests.length],
+                            ["Ongoing", sidequests.filter(isOngoingSidequest).length],
+                            ["Queued", overviewStats.queuedSidequests.length],
+                            ["Completed", overviewStats.completedSidequests.length],
+                        ].map(([label, value]) => (
+                            <div key={label} className="rounded-xl border border-claret/20 p-3">
+                                <p className="text-xs uppercase tracking-widest opacity-75">{label}</p>
+                                <p className="mt-1 text-3xl font-bold">{value}</p>
                             </div>
-                        )) : <p className="text-lg">No ongoing sidequests yet.</p>}
+                        ))}
                     </div>
+                    <div className="hide-scrollbar mt-4 max-h-64 overflow-y-auto pr-1">
+                        <div className="grid gap-2 md:grid-cols-2">
+                            {overviewSidequests.length > 0 ? overviewSidequests.map((sidequest) => (
+                                <button
+                                    key={sidequest._id}
+                                    type="button"
+                                    onClick={() => setSelectedSidequest(sidequest)}
+                                    className="rounded-xl border border-claret/20 p-3 text-left transition-colors hover:bg-claret hover:text-pink"
+                                >
+                                    <span className="block text-xl font-bold leading-tight">{sidequest.title}</span>
+                                    <span className="mt-1 block text-xs uppercase tracking-widest opacity-75">{getSidequestStatus(sidequest)} · Cost {getDisplayedCost(sidequest)}</span>
+                                </button>
+                            )) : <p className="text-lg">No sidequests yet.</p>}
+                        </div>
+                    </div>
+                    <PaginationControls
+                        page={safeSidequestOverviewPage}
+                        totalPages={sidequestOverviewTotalPages}
+                        onPageChange={setSidequestOverviewPage}
+                        label="Sidequests"
+                    />
                 </>
             ),
         },
@@ -620,6 +657,94 @@ export default function Dashboard() {
 
                 <div className="h-10"></div>
             </div>
+            {selectedBloomPlan ? (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-claret/60 p-4"
+                    onClick={() => setSelectedBloomPlan(null)}
+                >
+                    <article
+                        className="w-full max-w-md rounded-2xl border border-claret/20 bg-pink p-6 text-claret shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                                <p className="text-sm uppercase tracking-widest opacity-75">
+                                    {parseDateKey(selectedBloomPlan.date).toLocaleDateString("en-NG", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+                                </p>
+                                <div className="mt-2 flex items-center gap-2">
+                                    <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: selectedBloomPlan.color }} />
+                                    <h4 className="text-2xl font-bold leading-tight">{selectedBloomPlan.title}</h4>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedBloomPlan(null)}
+                                aria-label="Close Bloom plan details"
+                                title="Close"
+                                className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl border border-claret hover:bg-claret hover:text-pink"
+                            >
+                                <X className="size-4" />
+                            </button>
+                        </div>
+                        {selectedBloomPlan.notes ? (
+                            <p className="mt-4 whitespace-pre-wrap text-base tracking-normal opacity-85">{selectedBloomPlan.notes}</p>
+                        ) : (
+                            <p className="mt-4 text-base opacity-75">No notes added.</p>
+                        )}
+                    </article>
+                </div>
+            ) : null}
+            {selectedSidequest ? (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-claret/60 p-4"
+                    onClick={() => setSelectedSidequest(null)}
+                >
+                    <article
+                        className="hide-scrollbar max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-claret/20 bg-pink p-6 text-claret shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <p className="text-sm uppercase tracking-widest opacity-75">{getSidequestStatus(selectedSidequest)}</p>
+                                <h4 className="mt-1 text-2xl font-bold leading-tight">{selectedSidequest.title}</h4>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedSidequest(null)}
+                                aria-label="Close sidequest details"
+                                title="Close"
+                                className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl border border-claret hover:bg-claret hover:text-pink"
+                            >
+                                <X className="size-4" />
+                            </button>
+                        </div>
+                        <p className="mt-4 text-lg tracking-normal">{selectedSidequest.description}</p>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-xl border border-claret/20 p-3">
+                                <p className="text-xs uppercase tracking-widest opacity-75">Cost</p>
+                                <p className="mt-1 text-2xl font-bold">{getDisplayedCost(selectedSidequest)}</p>
+                            </div>
+                            <div className="rounded-xl border border-claret/20 p-3">
+                                <p className="text-xs uppercase tracking-widest opacity-75">Created</p>
+                                <p className="mt-1 text-lg font-bold">{selectedSidequest.createdAt ? new Date(selectedSidequest.createdAt).toLocaleDateString() : "Unknown"}</p>
+                            </div>
+                        </div>
+                        {normalizeMilestones(selectedSidequest.milestones).length ? (
+                            <div className="mt-4">
+                                <p className="text-sm uppercase tracking-widest opacity-75">Milestones</p>
+                                <div className="mt-2 space-y-2">
+                                    {normalizeMilestones(selectedSidequest.milestones).map((milestone) => (
+                                        <div key={milestone.id} className="flex items-start justify-between gap-3 rounded-xl border border-claret/20 p-3">
+                                            <p className={milestone.done ? "line-through opacity-60" : ""}>{milestone.title}</p>
+                                            <p className="shrink-0 text-xs uppercase tracking-widest opacity-75">{milestone.done ? "Done" : "Open"}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : null}
+                    </article>
+                </div>
+            ) : null}
         </Layout>
     )
 }

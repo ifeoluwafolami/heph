@@ -56,7 +56,8 @@ export default function BudgetCategories({ categories = defaultCategories, expen
           </button>
         </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="hide-scrollbar max-h-[34rem] overflow-y-auto pr-1">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {paginatedCategories.map((category) => {
           // support backend BudgetDto shape: { name, monthlyBudget, spentAmount }
           const name = (category.name ?? category.name) as string
@@ -134,6 +135,7 @@ export default function BudgetCategories({ categories = defaultCategories, expen
             </article>
           );
         })}
+        </div>
         </div>
         <PaginationControls
           page={safePage}

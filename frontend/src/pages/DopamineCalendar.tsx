@@ -187,6 +187,10 @@ function createGoalStepDraft(): GoalStepDraft {
   };
 }
 
+function shouldIgnoreGoalToggle(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest("button, a, input, select, textarea, label"));
+}
+
 export default function DopamineCalendar() {
   const toast = useToast();
   const [goals, setGoals] = useState<GoalDto[]>(loadCachedGoals);
@@ -583,7 +587,7 @@ export default function DopamineCalendar() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              {doneToday ? <Check className="size-4" /> : <Circle className="size-4" />}
+              {doneToday ? <Check className="size-5 md:size-4" /> : <Circle className="size-5 md:size-4" />}
               <h4 className="text-xl font-bold">{step.title}</h4>
             </div>
             <p className="mt-1 text-xs uppercase tracking-widest opacity-75">{getFrequencyLabel(step)}</p>
@@ -596,7 +600,7 @@ export default function DopamineCalendar() {
               aria-label={`Check in ${step.title}`}
               title={`Check in ${step.title}`}
             >
-              <Check className="size-4" />
+              <Check className="size-5 md:size-4" />
             </button>
             <button
               type="button"
@@ -642,8 +646,12 @@ export default function DopamineCalendar() {
       <article
         key={goal._id}
         className="cursor-pointer rounded-2xl bg-pink p-5 text-claret shadow-xl"
-        onClick={() => toggleGoalExpanded(goal._id)}
+        onClick={(event) => {
+          if (shouldIgnoreGoalToggle(event.target)) return;
+          toggleGoalExpanded(goal._id);
+        }}
         onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             toggleGoalExpanded(goal._id);
@@ -654,27 +662,29 @@ export default function DopamineCalendar() {
         aria-expanded={isExpanded}
         aria-controls={`goal-steps-${goal._id}`}
       >
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="flex flex-1 items-start gap-3 text-left">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-start gap-3 text-left">
             <ChevronDown className={`mt-1 size-5 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Flag className="size-5" />
-                <h3 className="text-2xl font-bold">{goal.title}</h3>
-                <span className="rounded-full border border-claret/30 px-3 py-1 text-xs uppercase tracking-widest">{goal.status}</span>
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-start gap-2">
+                <Flag className="mt-1 size-5 shrink-0" />
+                <div className="min-w-0">
+                  <h3 className="break-words text-2xl font-bold leading-tight">{goal.title}</h3>
+                  <span className="mt-2 inline-flex rounded-full border border-claret/30 px-3 py-1 text-xs uppercase tracking-widest">{goal.status}</span>
+                </div>
               </div>
               {goal.description ? <p className="mt-2 text-lg">{goal.description}</p> : null}
               {goal.targetDate ? <p className="mt-2 text-xs uppercase font-black tracking-widest opacity-75">{parseDateKey(goal.targetDate).toLocaleDateString("en-NG", { month: "long", day: "numeric", year: "numeric" })}</p> : null}
             </div>
           </div>
-          <div className="relative flex gap-2">
+          <div className="relative flex shrink-0 gap-2">
             <button
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
                 setOpenGoalMenuId((current) => current === goal._id ? null : goal._id);
               }}
-              className="inline-flex items-center justify-center rounded-xl border border-claret px-3 py-2 hover:bg-claret hover:text-pink md:hidden"
+              className="inline-flex items-center justify-center rounded-xl px-2 py-2 hover:bg-claret hover:text-pink md:hidden"
               aria-label={`${openGoalMenuId === goal._id ? "Close" : "Open"} ${goal.title} actions`}
               title={`${goal.title} actions`}
             >

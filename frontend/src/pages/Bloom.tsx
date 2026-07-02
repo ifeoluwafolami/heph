@@ -2,8 +2,29 @@ import Layout from "@/components/Layout";
 import CustomDateInput from "@/components/CustomDateInput";
 import { ModalBody, ModalFooter, ModalFrame, ModalHead } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
-import { createBloomPlan, deleteBloomPlan, getBloomPlans, updateBloomPlan, type BloomPlanDto } from "@/lib/api";
-import { Bell, ChevronLeft, ChevronRight, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import {
+  createBloomCourse,
+  createBloomCourseLog,
+  createBloomDeepDive,
+  createBloomDeepDiveLog,
+  createBloomPlan,
+  deleteBloomCourse,
+  deleteBloomCourseLog,
+  deleteBloomDeepDive,
+  deleteBloomDeepDiveLog,
+  deleteBloomPlan,
+  getBloomCourses,
+  getBloomDeepDives,
+  getBloomPlans,
+  updateBloomCourse,
+  updateBloomDeepDive,
+  updateBloomPlan,
+  type BloomCourseDto,
+  type BloomDeepDiveDto,
+  type BloomDeepDiveReferenceDto,
+  type BloomPlanDto,
+} from "@/lib/api";
+import { Bell, BookOpen, CalendarDays, ChevronLeft, ChevronRight, Clock, ExternalLink, GraduationCap, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const PLAN_COLORS = [
@@ -14,6 +35,10 @@ const PLAN_COLORS = [
   { name: "Blue", value: "#1d4ed8" },
   { name: "Violet", value: "#7c3aed" },
 ];
+
+type BloomTab = "calendar" | "learning";
+type LearningTab = "courses" | "deep-dives";
+type ReferenceDraft = { id: string; label: string; url: string };
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -28,6 +53,23 @@ function toDateKey(date: Date) {
 
 function parseDateKey(dateKey: string) {
   return new Date(`${dateKey}T00:00:00`);
+}
+
+function formatDuration(minutes: number) {
+  const safeMinutes = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(safeMinutes / 60);
+  const mins = safeMinutes % 60;
+  if (hours && mins) return `${hours}h ${mins}m`;
+  if (hours) return `${hours}h`;
+  return `${mins}m`;
+}
+
+function makeReferenceDraft(reference?: BloomDeepDiveReferenceDto): ReferenceDraft {
+  return {
+    id: reference?.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    label: reference?.label || "",
+    url: reference?.url || "",
+  };
 }
 
 function getQuarterStart(date: Date) {
@@ -69,6 +111,24 @@ export default function Bloom() {
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [activeDateKey, setActiveDateKey] = useState<string | null>(null);
   const [isEventPanelPinned, setIsEventPanelPinned] = useState(false);
+  const [activeBloomTab, setActiveBloomTab] = useState<BloomTab>("calendar");
+  const [activeLearningTab, setActiveLearningTab] = useState<LearningTab>("courses");
+  const [courses, setCourses] = useState<BloomCourseDto[]>([]);
+  const [deepDives, setDeepDives] = useState<BloomDeepDiveDto[]>([]);
+  const [courseTitle, setCourseTitle] = useState("");
+  const [courseHours, setCourseHours] = useState("");
+  const [courseMinutes, setCourseMinutes] = useState("");
+  const [editingCourse, setEditingCourse] = useState<BloomCourseDto | null>(null);
+  const [courseLogHoursById, setCourseLogHoursById] = useState<Record<string, string>>({});
+  const [courseLogMinutesById, setCourseLogMinutesById] = useState<Record<string, string>>({});
+  const [courseLogDateById, setCourseLogDateById] = useState<Record<string, string>>({});
+  const [deepDiveTopic, setDeepDiveTopic] = useState("");
+  const [deepDiveTidbits, setDeepDiveTidbits] = useState("");
+  const [deepDiveReferences, setDeepDiveReferences] = useState<ReferenceDraft[]>([makeReferenceDraft()]);
+  const [editingDeepDive, setEditingDeepDive] = useState<BloomDeepDiveDto | null>(null);
+  const [deepDiveLogHoursById, setDeepDiveLogHoursById] = useState<Record<string, string>>({});
+  const [deepDiveLogMinutesById, setDeepDiveLogMinutesById] = useState<Record<string, string>>({});
+  const [deepDiveLogDateById, setDeepDiveLogDateById] = useState<Record<string, string>>({});
   const quarterMonths = useMemo(() => getQuarterMonths(quarterStart), [quarterStart]);
   const visibleMonth = quarterMonths[visibleMonthIndex] || quarterMonths[0];
   const plansByDate = useMemo(() => {
@@ -89,6 +149,15 @@ export default function Bloom() {
   }, [plans]);
   const quarterLabel = `Q${Math.floor(quarterStart.getMonth() / 3) + 1} ${quarterStart.getFullYear()}`;
   const activeDatePlans = activeDateKey ? plansByDate[activeDateKey] || [] : [];
+  const courseStats = useMemo(() => {
+    const totalRequired = courses.reduce((sum, course) => sum + course.durationMinutes, 0);
+    const totalLogged = courses.reduce((sum, course) => sum + (course.logs || []).reduce((logSum, log) => logSum + log.minutes, 0), 0);
+    return {
+      totalRequired,
+      totalLogged,
+      percent: totalRequired > 0 ? Math.min(100, Math.round((totalLogged / totalRequired) * 100)) : 0,
+    };
+  }, [courses]);
 
   function canUseHoverPreview() {
     return typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
@@ -125,6 +194,25 @@ export default function Bloom() {
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [activeDateKey]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadLearning() {
+      try {
+        const [courseItems, deepDiveItems] = await Promise.all([getBloomCourses(), getBloomDeepDives()]);
+        if (!mounted) return;
+        setCourses(courseItems);
+        setDeepDives(deepDiveItems);
+      } catch (err) {
+        console.error(err);
+        if (mounted) toast.push({ type: "error", message: "Could not load Bloom learning." });
+      }
+    }
+
+    loadLearning();
+    return () => { mounted = false };
+  }, [toast]);
 
   async function addPlan() {
     const cleanTitle = title.trim();
@@ -256,6 +344,168 @@ export default function Bloom() {
     setIsEventPanelPinned(false);
   }
 
+  function resetCourseForm() {
+    setEditingCourse(null);
+    setCourseTitle("");
+    setCourseHours("");
+    setCourseMinutes("");
+  }
+
+  function beginEditCourse(course: BloomCourseDto) {
+    setEditingCourse(course);
+    setCourseTitle(course.title);
+    setCourseHours(String(Math.floor(course.durationMinutes / 60)));
+    setCourseMinutes(String(course.durationMinutes % 60));
+  }
+
+  async function saveCourse() {
+    const cleanTitle = courseTitle.trim();
+    const durationMinutes = (Number(courseHours) || 0) * 60 + (Number(courseMinutes) || 0);
+    if (!cleanTitle || durationMinutes < 1) return;
+    try {
+      if (editingCourse) {
+        const updated = await updateBloomCourse(editingCourse._id, { title: cleanTitle, durationMinutes });
+        setCourses((current) => current.map((course) => course._id === updated._id ? updated : course));
+        toast.push({ type: "success", message: "Course updated." });
+      } else {
+        const created = await createBloomCourse({ title: cleanTitle, durationMinutes });
+        setCourses((current) => [created, ...current]);
+        toast.push({ type: "success", message: "Course added." });
+      }
+      resetCourseForm();
+    } catch (err) {
+      console.error(err);
+      toast.push({ type: "error", message: "Could not save course." });
+    }
+  }
+
+  async function removeCourse(id: string) {
+    try {
+      await deleteBloomCourse(id);
+      setCourses((current) => current.filter((course) => course._id !== id));
+      if (editingCourse?._id === id) resetCourseForm();
+      toast.push({ type: "success", message: "Course removed." });
+    } catch (err) {
+      console.error(err);
+      toast.push({ type: "error", message: "Could not remove course." });
+    }
+  }
+
+  async function logCourseTime(courseId: string) {
+    const minutes = (Number(courseLogHoursById[courseId]) || 0) * 60 + (Number(courseLogMinutesById[courseId]) || 0);
+    const logDate = courseLogDateById[courseId] || todayKey();
+    if (minutes < 1) return;
+    try {
+      const updated = await createBloomCourseLog(courseId, { date: logDate, minutes });
+      setCourses((current) => current.map((course) => course._id === updated._id ? updated : course));
+      setCourseLogHoursById((current) => ({ ...current, [courseId]: "" }));
+      setCourseLogMinutesById((current) => ({ ...current, [courseId]: "" }));
+      setCourseLogDateById((current) => ({ ...current, [courseId]: todayKey() }));
+      toast.push({ type: "success", message: "Progress logged." });
+    } catch (err) {
+      console.error(err);
+      toast.push({ type: "error", message: "Could not log progress." });
+    }
+  }
+
+  async function removeCourseLog(courseId: string, logId: string) {
+    try {
+      const updated = await deleteBloomCourseLog(courseId, logId);
+      setCourses((current) => current.map((course) => course._id === updated._id ? updated : course));
+    } catch (err) {
+      console.error(err);
+      toast.push({ type: "error", message: "Could not remove progress log." });
+    }
+  }
+
+  function resetDeepDiveForm() {
+    setEditingDeepDive(null);
+    setDeepDiveTopic("");
+    setDeepDiveTidbits("");
+    setDeepDiveReferences([makeReferenceDraft()]);
+  }
+
+  function beginEditDeepDive(deepDive: BloomDeepDiveDto) {
+    setEditingDeepDive(deepDive);
+    setDeepDiveTopic(deepDive.topic);
+    setDeepDiveTidbits(deepDive.tidbits || "");
+    setDeepDiveReferences(deepDive.references.length ? deepDive.references.map(makeReferenceDraft) : [makeReferenceDraft()]);
+  }
+
+  function updateReferenceDraft(id: string, update: Partial<ReferenceDraft>) {
+    setDeepDiveReferences((current) => current.map((reference) => reference.id === id ? { ...reference, ...update } : reference));
+  }
+
+  function addReferenceDraft() {
+    setDeepDiveReferences((current) => [...current, makeReferenceDraft()]);
+  }
+
+  function removeReferenceDraft(id: string) {
+    setDeepDiveReferences((current) => current.length > 1 ? current.filter((reference) => reference.id !== id) : [makeReferenceDraft()]);
+  }
+
+  async function saveDeepDive() {
+    const topic = deepDiveTopic.trim();
+    if (!topic) return;
+    const references = deepDiveReferences
+      .map((reference) => ({ id: reference.id, label: reference.label.trim(), url: reference.url.trim() }))
+      .filter((reference) => reference.url);
+    try {
+      if (editingDeepDive) {
+        const updated = await updateBloomDeepDive(editingDeepDive._id, { topic, tidbits: deepDiveTidbits.trim(), references });
+        setDeepDives((current) => current.map((deepDive) => deepDive._id === updated._id ? updated : deepDive));
+        toast.push({ type: "success", message: "Deep dive updated." });
+      } else {
+        const created = await createBloomDeepDive({ topic, tidbits: deepDiveTidbits.trim(), references });
+        setDeepDives((current) => [created, ...current]);
+        toast.push({ type: "success", message: "Deep dive added." });
+      }
+      resetDeepDiveForm();
+    } catch (err) {
+      console.error(err);
+      toast.push({ type: "error", message: "Could not save deep dive." });
+    }
+  }
+
+  async function removeDeepDive(id: string) {
+    try {
+      await deleteBloomDeepDive(id);
+      setDeepDives((current) => current.filter((deepDive) => deepDive._id !== id));
+      if (editingDeepDive?._id === id) resetDeepDiveForm();
+      toast.push({ type: "success", message: "Deep dive removed." });
+    } catch (err) {
+      console.error(err);
+      toast.push({ type: "error", message: "Could not remove deep dive." });
+    }
+  }
+
+  async function logDeepDiveTime(deepDiveId: string) {
+    const minutes = (Number(deepDiveLogHoursById[deepDiveId]) || 0) * 60 + (Number(deepDiveLogMinutesById[deepDiveId]) || 0);
+    const logDate = deepDiveLogDateById[deepDiveId] || todayKey();
+    if (minutes < 1) return;
+    try {
+      const updated = await createBloomDeepDiveLog(deepDiveId, { date: logDate, minutes });
+      setDeepDives((current) => current.map((deepDive) => deepDive._id === updated._id ? updated : deepDive));
+      setDeepDiveLogHoursById((current) => ({ ...current, [deepDiveId]: "" }));
+      setDeepDiveLogMinutesById((current) => ({ ...current, [deepDiveId]: "" }));
+      setDeepDiveLogDateById((current) => ({ ...current, [deepDiveId]: todayKey() }));
+      toast.push({ type: "success", message: "Deep dive time logged." });
+    } catch (err) {
+      console.error(err);
+      toast.push({ type: "error", message: "Could not log deep dive time." });
+    }
+  }
+
+  async function removeDeepDiveLog(deepDiveId: string, logId: string) {
+    try {
+      const updated = await deleteBloomDeepDiveLog(deepDiveId, logId);
+      setDeepDives((current) => current.map((deepDive) => deepDive._id === updated._id ? updated : deepDive));
+    } catch (err) {
+      console.error(err);
+      toast.push({ type: "error", message: "Could not remove deep dive log." });
+    }
+  }
+
   return (
     <Layout>
       <section className="w-full space-y-6">
@@ -269,6 +519,7 @@ export default function Bloom() {
                 A quarterly planning calendar for color-coded patterns, plans, and near-term reminders.
               </p>
             </div>
+            {activeBloomTab === "calendar" ? (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -290,9 +541,30 @@ export default function Bloom() {
                 <ChevronRight className="size-5" />
               </button>
             </div>
+            ) : null}
           </div>
         </div>
 
+        <div className="mb-4 flex rounded-2xl border border-pink/30 bg-pink/10 p-1 text-pink">
+          <button
+            type="button"
+            onClick={() => setActiveBloomTab("calendar")}
+            className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm uppercase tracking-widest transition-all ${activeBloomTab === "calendar" ? "bg-pink text-claret" : "hover:bg-pink/10"}`}
+          >
+            <CalendarDays className="size-4" />
+            Calendar
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveBloomTab("learning")}
+            className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm uppercase tracking-widest transition-all ${activeBloomTab === "learning" ? "bg-pink text-claret" : "hover:bg-pink/10"}`}
+          >
+            <GraduationCap className="size-4" />
+            Learning
+          </button>
+        </div>
+
+        {activeBloomTab === "calendar" ? (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_1fr]">
           <aside className="space-y-4">
             <div className="rounded-2xl bg-pink text-claret p-6 shadow-xl border border-claret/20">
@@ -473,6 +745,233 @@ export default function Bloom() {
               ) : null}
           </div>
         </div>
+        ) : (
+          <div className="space-y-6">
+            <section className="rounded-2xl bg-pink p-6 text-claret shadow-xl md:p-8">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <GraduationCap className="size-6" />
+                    <h2 className="text-3xl font-bold uppercase">Learning</h2>
+                  </div>
+                  <p className="mt-2 text-lg tracking-normal">Track course hours and collect the curious trails worth remembering.</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border border-claret/20 p-3">
+                    <p className="text-xs uppercase tracking-widest opacity-75">Logged</p>
+                    <p className="mt-1 text-2xl font-bold">{formatDuration(courseStats.totalLogged)}</p>
+                  </div>
+                  <div className="rounded-xl border border-claret/20 p-3">
+                    <p className="text-xs uppercase tracking-widest opacity-75">Course Load</p>
+                    <p className="mt-1 text-2xl font-bold">{formatDuration(courseStats.totalRequired)}</p>
+                  </div>
+                  <div className="rounded-xl border border-claret/20 p-3">
+                    <p className="text-xs uppercase tracking-widest opacity-75">Progress</p>
+                    <p className="mt-1 text-2xl font-bold">{courseStats.percent}%</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <div className="mb-4 flex rounded-2xl border border-pink/30 bg-pink/10 p-1 text-pink">
+              <button
+                type="button"
+                onClick={() => setActiveLearningTab("courses")}
+                className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm uppercase tracking-widest transition-all ${activeLearningTab === "courses" ? "bg-pink text-claret" : "hover:bg-pink/10"}`}
+              >
+                <BookOpen className="size-4" />
+                Course Progress
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveLearningTab("deep-dives")}
+                className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm uppercase tracking-widest transition-all ${activeLearningTab === "deep-dives" ? "bg-pink text-claret" : "hover:bg-pink/10"}`}
+              >
+                <Search className="size-4" />
+                Deep Dives
+              </button>
+            </div>
+
+            {activeLearningTab === "courses" ? (
+              <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
+                <section className="rounded-2xl bg-pink p-6 text-claret shadow-xl">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="size-5" />
+                    <h3 className="text-2xl font-bold uppercase">{editingCourse ? "Edit Course" : "New Course"}</h3>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    <label className="block space-y-1">
+                      <span className="text-sm uppercase tracking-widest">Course Name</span>
+                      <input value={courseTitle} onChange={(event) => setCourseTitle(event.target.value)} className="w-full rounded-xl border border-claret/30 bg-pink px-3 py-2" />
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block space-y-1">
+                        <span className="text-sm uppercase tracking-widest">Hours</span>
+                        <input type="number" min={0} value={courseHours} onChange={(event) => setCourseHours(event.target.value)} className="no-number-spinner w-full rounded-xl border border-claret/30 bg-pink px-3 py-2" />
+                      </label>
+                      <label className="block space-y-1">
+                        <span className="text-sm uppercase tracking-widest">Minutes</span>
+                        <input type="number" min={0} max={59} value={courseMinutes} onChange={(event) => setCourseMinutes(event.target.value)} className="no-number-spinner w-full rounded-xl border border-claret/30 bg-pink px-3 py-2" />
+                      </label>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={saveCourse} disabled={!courseTitle.trim()} className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-claret bg-claret px-4 py-3 text-sm uppercase tracking-widest text-pink hover:bg-claret/90 disabled:opacity-40">
+                        {editingCourse ? <Save className="size-4" /> : <Plus className="size-4" />}
+                        {editingCourse ? "Save" : "Add"}
+                      </button>
+                      {editingCourse ? (
+                        <button type="button" onClick={resetCourseForm} className="rounded-2xl border border-claret px-4 py-3 text-sm uppercase tracking-widest hover:bg-claret hover:text-pink">Cancel</button>
+                      ) : null}
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl bg-pink p-4 text-claret shadow-xl md:p-6">
+                  <div className="hide-scrollbar max-h-[680px] space-y-3 overflow-y-auto pr-1">
+                    {courses.length ? courses.map((course) => {
+                      const logged = (course.logs || []).reduce((sum, log) => sum + log.minutes, 0);
+                      const percent = course.durationMinutes > 0 ? Math.min(100, Math.round((logged / course.durationMinutes) * 100)) : 0;
+                      return (
+                        <article key={course._id} className="rounded-xl border border-claret/20 p-4">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0">
+                              <h4 className="break-words text-2xl font-bold">{course.title}</h4>
+                              <p className="mt-1 text-xs uppercase tracking-widest opacity-75">{formatDuration(logged)} / {formatDuration(course.durationMinutes)}</p>
+                            </div>
+                            <div className="flex shrink-0 gap-2">
+                              <button type="button" onClick={() => beginEditCourse(course)} aria-label={`Edit ${course.title}`} title="Edit course" className="inline-flex size-9 items-center justify-center rounded-xl border border-claret hover:bg-claret hover:text-pink"><Pencil className="size-4" /></button>
+                              <button type="button" onClick={() => removeCourse(course._id)} aria-label={`Delete ${course.title}`} title="Delete course" className="inline-flex size-9 items-center justify-center rounded-xl border border-claret hover:bg-claret hover:text-pink"><Trash2 className="size-4" /></button>
+                            </div>
+                          </div>
+                          <div className="mt-4 h-3 overflow-hidden rounded-full bg-claret/20">
+                            <div className="h-full rounded-full bg-claret" style={{ width: `${percent}%` }} />
+                          </div>
+                          <div className="mt-4 grid gap-3 md:grid-cols-[1fr_96px_96px_auto]">
+                            <CustomDateInput value={courseLogDateById[course._id] || todayKey()} onChange={(value) => setCourseLogDateById((current) => ({ ...current, [course._id]: value || todayKey() }))} />
+                            <input type="number" min={0} value={courseLogHoursById[course._id] || ""} onChange={(event) => setCourseLogHoursById((current) => ({ ...current, [course._id]: event.target.value }))} placeholder="Hours" className="no-number-spinner min-w-0 rounded-xl border border-claret/30 bg-pink px-3 py-2" />
+                            <input type="number" min={0} max={59} value={courseLogMinutesById[course._id] || ""} onChange={(event) => setCourseLogMinutesById((current) => ({ ...current, [course._id]: event.target.value }))} placeholder="Mins" className="no-number-spinner min-w-0 rounded-xl border border-claret/30 bg-pink px-3 py-2" />
+                            <button type="button" onClick={() => logCourseTime(course._id)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-claret px-3 py-2 text-sm uppercase tracking-widest hover:bg-claret hover:text-pink sm:w-auto"><Clock className="size-4" /> Log</button>
+                          </div>
+                          {course.logs?.length ? (
+                            <div className="hide-scrollbar mt-4 max-h-36 space-y-2 overflow-y-auto pr-1">
+                              {[...course.logs].sort((a, b) => b.date.localeCompare(a.date)).map((log) => (
+                                <div key={log.id} className="flex items-center justify-between gap-3 rounded-xl border border-claret/20 px-3 py-2">
+                                  <p className="text-sm">{parseDateKey(log.date).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-bold">{formatDuration(log.minutes)}</p>
+                                    <button type="button" onClick={() => removeCourseLog(course._id, log.id)} aria-label="Remove log" title="Remove log" className="inline-flex size-7 items-center justify-center rounded-lg hover:bg-claret hover:text-pink"><X className="size-4" /></button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </article>
+                      );
+                    }) : (
+                      <p className="rounded-xl border border-dashed border-claret/30 p-4 text-sm uppercase tracking-widest opacity-70">No courses yet</p>
+                    )}
+                  </div>
+                </section>
+              </div>
+            ) : (
+              <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
+                <section className="rounded-2xl bg-pink p-6 text-claret shadow-xl">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="size-5" />
+                    <h3 className="text-2xl font-bold uppercase">{editingDeepDive ? "Edit Deep Dive" : "New Deep Dive"}</h3>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    <label className="block space-y-1">
+                      <span className="text-sm uppercase tracking-widest">Topic</span>
+                      <input value={deepDiveTopic} onChange={(event) => setDeepDiveTopic(event.target.value)} className="w-full rounded-xl border border-claret/30 bg-pink px-3 py-2" />
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-sm uppercase tracking-widest">Tidbits</span>
+                      <textarea value={deepDiveTidbits} onChange={(event) => setDeepDiveTidbits(event.target.value)} rows={7} className="w-full rounded-xl border border-claret/30 bg-pink px-3 py-2" />
+                    </label>
+                    <div className="space-y-2">
+                      <p className="text-sm uppercase tracking-widest">References</p>
+                      {deepDiveReferences.map((reference) => (
+                        <div key={reference.id} className="grid gap-2 rounded-xl border border-claret/20 p-2 sm:grid-cols-[1fr_1fr_auto]">
+                          <input value={reference.label} onChange={(event) => updateReferenceDraft(reference.id, { label: event.target.value })} placeholder="Label" className="min-w-0 rounded-xl border border-claret/30 bg-pink px-3 py-2" />
+                          <input value={reference.url} onChange={(event) => updateReferenceDraft(reference.id, { url: event.target.value })} placeholder="https://" className="min-w-0 rounded-xl border border-claret/30 bg-pink px-3 py-2" />
+                          <button type="button" onClick={() => removeReferenceDraft(reference.id)} aria-label="Remove reference" title="Remove reference" className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-claret hover:bg-claret hover:text-pink sm:size-10"><Trash2 className="size-4" /></button>
+                        </div>
+                      ))}
+                      <button type="button" onClick={addReferenceDraft} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-claret px-3 py-2 text-sm uppercase tracking-widest hover:bg-claret hover:text-pink"><Plus className="size-4" /> Reference</button>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={saveDeepDive} disabled={!deepDiveTopic.trim()} className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-claret bg-claret px-4 py-3 text-sm uppercase tracking-widest text-pink hover:bg-claret/90 disabled:opacity-40">
+                        {editingDeepDive ? <Save className="size-4" /> : <Plus className="size-4" />}
+                        {editingDeepDive ? "Save" : "Add"}
+                      </button>
+                      {editingDeepDive ? (
+                        <button type="button" onClick={resetDeepDiveForm} className="rounded-2xl border border-claret px-4 py-3 text-sm uppercase tracking-widest hover:bg-claret hover:text-pink">Cancel</button>
+                      ) : null}
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl bg-pink p-4 text-claret shadow-xl md:p-6">
+                  <div className="hide-scrollbar max-h-[720px] space-y-3 overflow-y-auto pr-1">
+                    {deepDives.length ? deepDives.map((deepDive) => (
+                      <article key={deepDive._id} className="rounded-xl border border-claret/20 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h4 className="break-words text-2xl font-bold">{deepDive.topic}</h4>
+                            {deepDive.createdAt ? <p className="mt-1 text-xs uppercase tracking-widest opacity-75">{new Date(deepDive.createdAt).toLocaleDateString()}</p> : null}
+                          </div>
+                          <div className="flex shrink-0 gap-2">
+                            <button type="button" onClick={() => beginEditDeepDive(deepDive)} aria-label={`Edit ${deepDive.topic}`} title="Edit deep dive" className="inline-flex size-9 items-center justify-center rounded-xl border border-claret hover:bg-claret hover:text-pink"><Pencil className="size-4" /></button>
+                            <button type="button" onClick={() => removeDeepDive(deepDive._id)} aria-label={`Delete ${deepDive.topic}`} title="Delete deep dive" className="inline-flex size-9 items-center justify-center rounded-xl border border-claret hover:bg-claret hover:text-pink"><Trash2 className="size-4" /></button>
+                          </div>
+                        </div>
+                        {deepDive.tidbits ? <p className="mt-3 whitespace-pre-wrap text-base tracking-normal">{deepDive.tidbits}</p> : null}
+                        {deepDive.references?.length ? (
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {deepDive.references.map((reference) => (
+                              <a key={reference.id} href={reference.url} target="_blank" rel="noreferrer" className="inline-flex max-w-full items-center gap-1 break-all rounded-xl border border-claret/30 px-3 py-2 text-sm hover:bg-claret hover:text-pink">
+                                <ExternalLink className="size-4" />
+                                {reference.label || reference.url}
+                              </a>
+                            ))}
+                          </div>
+                        ) : null}
+                        <div className="mt-4 rounded-xl border border-claret/20 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm uppercase tracking-widest opacity-75">Time Logged</p>
+                            <p className="font-bold">{formatDuration((deepDive.logs || []).reduce((sum, log) => sum + log.minutes, 0))}</p>
+                          </div>
+                          <div className="mt-3 grid gap-3 md:grid-cols-[1fr_96px_96px_auto]">
+                            <CustomDateInput value={deepDiveLogDateById[deepDive._id] || todayKey()} onChange={(value) => setDeepDiveLogDateById((current) => ({ ...current, [deepDive._id]: value || todayKey() }))} />
+                            <input type="number" min={0} value={deepDiveLogHoursById[deepDive._id] || ""} onChange={(event) => setDeepDiveLogHoursById((current) => ({ ...current, [deepDive._id]: event.target.value }))} placeholder="Hours" className="no-number-spinner min-w-0 rounded-xl border border-claret/30 bg-pink px-3 py-2" />
+                            <input type="number" min={0} max={59} value={deepDiveLogMinutesById[deepDive._id] || ""} onChange={(event) => setDeepDiveLogMinutesById((current) => ({ ...current, [deepDive._id]: event.target.value }))} placeholder="Mins" className="no-number-spinner min-w-0 rounded-xl border border-claret/30 bg-pink px-3 py-2" />
+                            <button type="button" onClick={() => logDeepDiveTime(deepDive._id)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-claret px-3 py-2 text-sm uppercase tracking-widest hover:bg-claret hover:text-pink sm:w-auto"><Clock className="size-4" /> Log</button>
+                          </div>
+                          {deepDive.logs?.length ? (
+                            <div className="hide-scrollbar mt-3 max-h-36 space-y-2 overflow-y-auto pr-1">
+                              {[...deepDive.logs].sort((a, b) => b.date.localeCompare(a.date)).map((log) => (
+                                <div key={log.id} className="flex items-center justify-between gap-3 rounded-xl border border-claret/20 px-3 py-2">
+                                  <p className="text-sm">{parseDateKey(log.date).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-bold">{formatDuration(log.minutes)}</p>
+                                    <button type="button" onClick={() => removeDeepDiveLog(deepDive._id, log.id)} aria-label="Remove deep dive log" title="Remove log" className="inline-flex size-7 items-center justify-center rounded-lg hover:bg-claret hover:text-pink"><X className="size-4" /></button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      </article>
+                    )) : (
+                      <p className="rounded-xl border border-dashed border-claret/30 p-4 text-sm uppercase tracking-widest opacity-70">No deep dives yet</p>
+                    )}
+                  </div>
+                </section>
+              </div>
+            )}
+          </div>
+        )}
 
         {isPlanModalOpen ? (
           <ModalFrame

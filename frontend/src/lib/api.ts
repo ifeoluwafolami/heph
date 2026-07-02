@@ -161,6 +161,37 @@ export type BloomPlanDto = {
   updatedAt?: string
 }
 
+export type BloomCourseLogDto = {
+  id: string
+  date: string
+  minutes: number
+}
+
+export type BloomCourseDto = {
+  _id: string
+  title: string
+  durationMinutes: number
+  logs: BloomCourseLogDto[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type BloomDeepDiveReferenceDto = {
+  id: string
+  label?: string
+  url: string
+}
+
+export type BloomDeepDiveDto = {
+  _id: string
+  topic: string
+  tidbits?: string
+  references: BloomDeepDiveReferenceDto[]
+  logs: BloomCourseLogDto[]
+  createdAt?: string
+  updatedAt?: string
+}
+
 const PROD_API_BASE = 'https://heph-backend.onrender.com/api/v1'
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
 
@@ -515,6 +546,80 @@ export async function updateBloomPlan(id: string, payload: Partial<{ title: stri
 
 export async function deleteBloomPlan(id: string) {
   return request<{ id: string }>(`/bloom/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getBloomCourses() {
+  return request<BloomCourseDto[]>('/bloom/courses')
+}
+
+export async function createBloomCourse(payload: { title: string; durationMinutes: number }) {
+  return request<BloomCourseDto>('/bloom/courses', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateBloomCourse(id: string, payload: Partial<{ title: string; durationMinutes: number }>) {
+  return request<BloomCourseDto>(`/bloom/courses/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteBloomCourse(id: string) {
+  return request<{ id: string }>(`/bloom/courses/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function createBloomCourseLog(courseId: string, payload: { date: string; minutes: number }) {
+  return request<BloomCourseDto>(`/bloom/courses/${courseId}/logs`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteBloomCourseLog(courseId: string, logId: string) {
+  return request<BloomCourseDto>(`/bloom/courses/${courseId}/logs/${logId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getBloomDeepDives() {
+  return request<BloomDeepDiveDto[]>('/bloom/deep-dives')
+}
+
+export async function createBloomDeepDive(payload: { topic: string; tidbits?: string; references?: Array<{ id?: string; label?: string; url: string }> }) {
+  return request<BloomDeepDiveDto>('/bloom/deep-dives', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateBloomDeepDive(id: string, payload: Partial<{ topic: string; tidbits: string; references: Array<{ id?: string; label?: string; url: string }> }>) {
+  return request<BloomDeepDiveDto>(`/bloom/deep-dives/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteBloomDeepDive(id: string) {
+  return request<{ id: string }>(`/bloom/deep-dives/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function createBloomDeepDiveLog(deepDiveId: string, payload: { date: string; minutes: number }) {
+  return request<BloomDeepDiveDto>(`/bloom/deep-dives/${deepDiveId}/logs`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteBloomDeepDiveLog(deepDiveId: string, logId: string) {
+  return request<BloomDeepDiveDto>(`/bloom/deep-dives/${deepDiveId}/logs/${logId}`, {
     method: 'DELETE',
   })
 }

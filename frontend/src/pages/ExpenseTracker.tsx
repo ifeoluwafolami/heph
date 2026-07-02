@@ -417,12 +417,12 @@ export default function ExpenseTracker() {
                                                             <MoreVertical className="size-4" />
                                                         </button>
                                                     </div>
-                                                    <div className="relative flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
+                                                    <div className="relative flex w-full items-center gap-2 md:w-auto md:flex-wrap" onClick={(event) => event.stopPropagation()}>
                                                         <input
                                                             value={savingsAmounts[target._id] || ""}
                                                             onChange={(event) => setSavingsAmounts((prev) => ({ ...prev, [target._id]: event.target.value.replace(/[^0-9]/g, "") }))}
                                                             inputMode="numeric"
-                                                            className="w-28 rounded-xl border border-claret/30 bg-pink px-3 py-2"
+                                                            className="min-w-0 flex-1 rounded-xl border border-claret/30 bg-pink px-3 py-2 md:w-28 md:flex-none"
                                                             placeholder="Amount"
                                                         />
                                                         <button type="button" onClick={() => updateSavings(target._id, "deposit")} aria-label="Save toward target" title="Save toward target" className="inline-flex size-10 items-center justify-center rounded-xl border border-claret bg-claret text-pink hover:bg-claret/90">
@@ -473,8 +473,8 @@ export default function ExpenseTracker() {
                             <h1 className="text-3xl md:text-5xl font-bold uppercase">Expenses</h1>
                             <p className="mt-2 text-lg md:text-2xl">Keep track of all your expenses here, baller!</p>
                         </div>
-                        <div className="flex gap-3 h-full items-center flex-wrap justify-center md:justify-end">
-                            <label className="space-y-1">
+                        <div className="flex w-full flex-wrap items-center justify-center gap-3 md:w-auto md:justify-end">
+                            <label className="w-full space-y-1 sm:w-auto">
                                 <span className="text-sm uppercase tracking-widest">Month</span>
                                 <input
                                     type="month"
@@ -486,7 +486,7 @@ export default function ExpenseTracker() {
                             <button
                                 type="button"
                                 onClick={() => setIsNewExpenseOpen(true)}
-                                className="rounded-2xl border border-claret bg-claret px-4 py-3 text-sm md:text-base uppercase tracking-widest text-pink hover:bg-claret/90 transition-all focus:outline-none focus:ring-2 focus:ring-claret focus:ring-offset-2 focus:ring-offset-pink"
+                                className="order-first inline-flex w-full flex-1 items-center justify-center rounded-2xl border border-claret bg-claret px-4 py-3 text-sm uppercase tracking-widest text-pink transition-all hover:bg-claret/90 focus:outline-none focus:ring-2 focus:ring-claret focus:ring-offset-2 focus:ring-offset-pink md:order-none md:w-auto md:flex-none md:text-base"
                             >
                                 New Expense
                             </button>
@@ -548,13 +548,15 @@ export default function ExpenseTracker() {
                                     <p className="mt-2 text-3xl font-bold">N{budgetHistory.totalBudgeted.toLocaleString()}</p>
                                 </div>
                             </div>
-                            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                                {budgetHistory.categories.map((category) => (
-                                    <div key={category._id || category.name} className="rounded-xl border border-claret/20 p-4">
-                                        <p className="text-xl font-bold">{category.name}</p>
-                                        <p className="mt-2 text-sm uppercase tracking-widest opacity-80">N{Number(category.spentAmount || 0).toLocaleString()} / N{category.monthlyBudget.toLocaleString()}</p>
-                                    </div>
-                                ))}
+                            <div className="hide-scrollbar mt-4 max-h-80 overflow-y-auto pr-1">
+                                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                    {budgetHistory.categories.map((category) => (
+                                        <div key={category._id || category.name} className="rounded-xl border border-claret/20 p-4">
+                                            <p className="text-xl font-bold">{category.name}</p>
+                                            <p className="mt-2 text-sm uppercase tracking-widest opacity-80">N{Number(category.spentAmount || 0).toLocaleString()} / N{category.monthlyBudget.toLocaleString()}</p>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </>
                     ) : (

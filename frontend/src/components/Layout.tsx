@@ -162,8 +162,14 @@ export default function Layout({children}: LayoutProps) {
             </footer>
 
             {showBloomReminders && upcomingBloomPlans.length ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-claret/60 p-4">
-                    <div className="hide-scrollbar h-[70vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-claret/20 bg-pink p-6 text-claret shadow-2xl">
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-claret/60 p-4"
+                    onClick={() => setShowBloomReminders(false)}
+                >
+                    <div
+                        className="hide-scrollbar h-[70vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-claret/20 bg-pink p-6 text-claret shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                    >
                         <div className="flex items-start justify-between gap-4">
                             <div className="flex items-center gap-2">
                                 <Bell className="size-5" />
