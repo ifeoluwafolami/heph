@@ -16,6 +16,7 @@ import {
     getSidequests,
     getWeights,
     toggleHabitLog,
+    updateSidequest,
     type BudgetDto,
     type BloomPlanDto,
     type ExpenseDto,
@@ -34,7 +35,7 @@ type RecentExpenseItem = {
     amount: string;
     category?: string | null;
 }
-type LocalHabit = { id: string; title: string; frequency: HabitFrequency; target: number; logs: string[] }
+type LocalHabit = { id: string; title: string; frequency: HabitFrequency; target: number; logs: string[]; createdAt?: string; updatedAt?: string }
 type UiMilestone = { id: string; title: string; done: boolean; cost?: number }
 
 const HABITS_STORAGE_KEY = "heph_dopamine_calendar"
@@ -156,7 +157,7 @@ function isCompletedSidequest(sidequest: SidequestDto) {
 function isOngoingSidequest(sidequest: SidequestDto) {
     if (isCompletedSidequest(sidequest)) return false
     const milestones = normalizeMilestones(sidequest.milestones)
-    if (milestones.length === 0) return true
+    if (milestones.length === 0) return false
     const done = milestones.filter((milestone) => milestone.done).length
     return done > 0
 }
@@ -172,6 +173,16 @@ function getDisplayedCost(sidequest: SidequestDto) {
     return hasMilestoneCosts ? milestones.reduce((sum, milestone) => sum + (milestone.cost || 0), 0) : sidequest.cost
 }
 
+function getHabitCreatedTime(habit: HabitDto) {
+    if (habit.createdAt) {
+        const time = new Date(habit.createdAt).getTime()
+        if (Number.isFinite(time)) return time
+    }
+
+    const objectIdTimestamp = /^[a-f\d]{24}$/i.test(habit._id) ? Number.parseInt(habit._id.slice(0, 8), 16) * 1000 : NaN
+    return Number.isFinite(objectIdTimestamp) ? objectIdTimestamp : Number.MAX_SAFE_INTEGER
+}
+
 function loadCachedHabits(): HabitDto[] {
     try {
         const raw = localStorage.getItem(HABITS_STORAGE_KEY)
@@ -182,6 +193,8 @@ function loadCachedHabits(): HabitDto[] {
             frequency: habit.frequency,
             target: habit.target,
             logs: habit.logs || [],
+            createdAt: habit.createdAt,
+            updatedAt: habit.updatedAt,
         }))
     } catch {
         return []
@@ -195,6 +208,8 @@ function cacheHabits(habits: HabitDto[]) {
         frequency: habit.frequency,
         target: habit.target,
         logs: habit.logs,
+        createdAt: habit.createdAt,
+        updatedAt: habit.updatedAt,
     }))))
 }
 
@@ -271,7 +286,8 @@ export default function Dashboard() {
     const [bloomPlans, setBloomPlans] = useState<BloomPlanDto[]>([])
     const [selectedBloomPlan, setSelectedBloomPlan] = useState<BloomPlanDto | null>(null)
     const [selectedSidequest, setSelectedSidequest] = useState<SidequestDto | null>(null)
-    const [overviewSlide, setOverviewSlide] = useState(0)
+    const [overviewSlide, setOverviewSlide] = useState(1)
+    const [isOverviewTransitioning, setIsOverviewTransitioning] = useState(true)
     const [overviewTouchStartX, setOverviewTouchStartX] = useState<number | null>(null)
     const [sidequestOverviewPage, setSidequestOverviewPage] = useState(1)
     const [habits, setHabits] = useState<HabitDto[]>([])
@@ -357,9 +373,63 @@ export default function Dashboard() {
         }
     }
 
+    async function toggleSelectedSidequestMilestone(milestoneId: string) {
+        if (!selectedSidequest) return
+        const previousSidequests = sidequests
+        const previousSelected = selectedSidequest
+        const milestones = normalizeMilestones(selectedSidequest.milestones)
+        const nextMilestones = milestones.map((milestone) => milestone.id === milestoneId ? { ...milestone, done: !milestone.done } : milestone)
+        const completed = nextMilestones.length > 0 ? nextMilestones.every((milestone) => milestone.done) : selectedSidequest.completed
+        const nextSelected = { ...selectedSidequest, milestones: nextMilestones, completed }
+
+        setSelectedSidequest(nextSelected)
+        setSidequests((current) => current.map((sidequest) => sidequest._id === nextSelected._id ? nextSelected : sidequest))
+
+        try {
+            const updated = await updateSidequest(selectedSidequest._id, { milestones: nextMilestones })
+            setSelectedSidequest((current) => current?._id === updated._id ? updated : current)
+            setSidequests((current) => current.map((sidequest) => sidequest._id === updated._id ? updated : sidequest))
+            window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'sidequest' } }))
+        } catch {
+            setSelectedSidequest(previousSelected)
+            setSidequests(previousSidequests)
+            toast.push({ type: "error", message: "Could not update milestone." })
+        }
+    }
+
+    async function toggleSelectedSidequestComplete() {
+        if (!selectedSidequest || normalizeMilestones(selectedSidequest.milestones).length > 0) return
+        const previousSidequests = sidequests
+        const previousSelected = selectedSidequest
+        const completed = !isCompletedSidequest(selectedSidequest)
+        const nextSelected = { ...selectedSidequest, completed }
+
+        setSelectedSidequest(nextSelected)
+        setSidequests((current) => current.map((sidequest) => sidequest._id === nextSelected._id ? nextSelected : sidequest))
+
+        try {
+            const updated = await updateSidequest(selectedSidequest._id, { completed })
+            setSelectedSidequest((current) => current?._id === updated._id ? updated : current)
+            setSidequests((current) => current.map((sidequest) => sidequest._id === updated._id ? updated : sidequest))
+            window.dispatchEvent(new CustomEvent('heph:data:changed', { detail: { resource: 'sidequest' } }))
+            toast.push({ type: "success", message: completed ? "Sidequest completed." : "Sidequest reopened." })
+        } catch {
+            setSelectedSidequest(previousSelected)
+            setSidequests(previousSidequests)
+            toast.push({ type: "error", message: "Could not update sidequest." })
+        }
+    }
+
     const sortedHabits = useMemo(() => {
         const order: Record<HabitFrequency, number> = { daily: 0, weekly: 1, monthly: 2 }
-        return [...habits].sort((a, b) => order[a.frequency] - order[b.frequency])
+        return habits
+            .map((habit, index) => ({ habit, index }))
+            .sort((a, b) => (
+                order[a.habit.frequency] - order[b.habit.frequency] ||
+                getHabitCreatedTime(a.habit) - getHabitCreatedTime(b.habit) ||
+                a.index - b.index
+            ))
+            .map(({ habit }) => habit)
     }, [habits])
 
     const habitsTotalPages = Math.max(1, Math.ceil(sortedHabits.length / DASHBOARD_HABITS_PER_PAGE))
@@ -441,7 +511,7 @@ export default function Dashboard() {
                     <div className="mt-5">
                         <p className="text-sm uppercase tracking-widest opacity-75">Hit This Month</p>
                         {overviewStats.monthlyHitHabits.length > 0 ? (
-                            <div className="mt-2 grid max-h-40 gap-2 overflow-y-auto pr-2 md:grid-cols-4">
+                            <div className="hide-scrollbar mt-2 grid max-h-40 gap-2 overflow-y-auto pr-2 md:grid-cols-4">
                                 {overviewStats.monthlyHitHabits.map(({ habit, done, target }) => (
                                     <div key={habit._id} className="rounded-xl border border-claret/20 px-3 py-2 flex flex-col justify-between">
                                         <p className={`font-bold capitalize ${habit.title.length > 24 ? 'text-base' : 'text-lg'}`}>{habit.title}</p>
@@ -515,7 +585,7 @@ export default function Dashboard() {
             to: "/odyssey",
             content: (
                 <>
-                    <div className="grid gap-2 md:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                         {[
                             ["Total", sidequests.length],
                             ["Ongoing", sidequests.filter(isOngoingSidequest).length],
@@ -535,10 +605,20 @@ export default function Dashboard() {
                                     key={sidequest._id}
                                     type="button"
                                     onClick={() => setSelectedSidequest(sidequest)}
-                                    className="rounded-xl border border-claret/20 p-3 text-left transition-colors hover:bg-claret hover:text-pink"
+                                    className="rounded-xl border border-claret/20 p-3 text-left transition-colors hover:bg-claret hover:text-pink group"
                                 >
-                                    <span className="block text-xl font-bold leading-tight">{sidequest.title}</span>
-                                    <span className="mt-1 block text-xs uppercase tracking-widest opacity-75">{getSidequestStatus(sidequest)} · Cost {getDisplayedCost(sidequest)}</span>
+                                    <div className="flex flex-col justify-center gap-2">
+                                        <div className="flex gap-1 items-baseline">
+                                            <span className="block text-xl font-bold leading-tight">{sidequest.title}</span>
+                                            <span className="uppercase tracking-widest text-xs opacity-75">({getSidequestStatus(sidequest)})</span> 
+                                        </div>
+                                        
+                                        <span className="p-1 bg-claret group-hover:bg-pink text-pink group-hover:text-claret text-xs w-fit">COST: {getDisplayedCost(sidequest)}</span> 
+                                    </div>
+                                   
+                                    
+
+                                    
                                 </button>
                             )) : <p className="text-lg">No sidequests yet.</p>}
                         </div>
@@ -554,9 +634,29 @@ export default function Dashboard() {
         },
     ]
 
-    const safeOverviewSlide = Math.min(overviewSlide, overviewSlides.length - 1)
-    const goToPreviousOverview = () => setOverviewSlide((slide) => (slide - 1 + overviewSlides.length) % overviewSlides.length)
-    const goToNextOverview = () => setOverviewSlide((slide) => (slide + 1) % overviewSlides.length)
+    const overviewCarouselSlides = overviewSlides.length ? [overviewSlides[overviewSlides.length - 1], ...overviewSlides, overviewSlides[0]] : []
+    const safeOverviewSlide = overviewSlides.length ? (overviewSlide - 1 + overviewSlides.length) % overviewSlides.length : 0
+    const goToPreviousOverview = () => {
+        setIsOverviewTransitioning(true)
+        setOverviewSlide((slide) => slide - 1)
+    }
+    const goToNextOverview = () => {
+        setIsOverviewTransitioning(true)
+        setOverviewSlide((slide) => slide + 1)
+    }
+    const finishOverviewTransition = () => {
+        if (!overviewSlides.length) return
+        if (overviewSlide === 0) {
+            setIsOverviewTransitioning(false)
+            setOverviewSlide(overviewSlides.length)
+            window.setTimeout(() => setIsOverviewTransitioning(true), 20)
+        }
+        if (overviewSlide === overviewSlides.length + 1) {
+            setIsOverviewTransitioning(false)
+            setOverviewSlide(1)
+            window.setTimeout(() => setIsOverviewTransitioning(true), 20)
+        }
+    }
 
     return (
         <Layout>
@@ -566,7 +666,7 @@ export default function Dashboard() {
                     <p className="text-lg md:text-2xl">I am so glad to see you!</p>
                 </div>
 
-                <section className="my-6 rounded-2xl bg-pink p-6 text-claret shadow-xl md:p-8">
+                <section className="my-6 rounded-2xl bg-pink p-4 text-claret shadow-xl md:p-8">
                     <div className="mb-4 flex items-center justify-between gap-3">
                         <h4 className="text-2xl font-bold uppercase md:text-3xl">Overview: {overviewSlides[safeOverviewSlide]?.title}</h4>
                         <div className="flex items-center gap-2">
@@ -592,9 +692,13 @@ export default function Dashboard() {
                             setOverviewTouchStartX(null)
                         }}
                     >
-                        <div className="flex transition-transform duration-300 ease-out" style={{ transform: `translateX(-${safeOverviewSlide * 100}%)` }}>
-                            {overviewSlides.map((slide) => (
-                                <article key={slide.title} className="min-w-full">
+                        <div
+                            className={`flex w-full ${isOverviewTransitioning ? "transition-transform duration-300 ease-out" : ""}`}
+                            style={{ transform: `translateX(-${overviewSlide * 100}%)` }}
+                            onTransitionEnd={finishOverviewTransition}
+                        >
+                            {overviewCarouselSlides.map((slide, index) => (
+                                <article key={`${slide.title}-${index}`} className="hide-scrollbar max-h-[22rem] w-full min-w-0 flex-none basis-full overflow-y-auto overflow-x-hidden pr-1 md:max-h-none md:overflow-visible md:pr-0">
                                     {slide.content}
                                 </article>
                             ))}
@@ -734,14 +838,41 @@ export default function Dashboard() {
                                 <p className="text-sm uppercase tracking-widest opacity-75">Milestones</p>
                                 <div className="mt-2 space-y-2">
                                     {normalizeMilestones(selectedSidequest.milestones).map((milestone) => (
-                                        <div key={milestone.id} className="flex items-start justify-between gap-3 rounded-xl border border-claret/20 p-3">
-                                            <p className={milestone.done ? "line-through opacity-60" : ""}>{milestone.title}</p>
-                                            <p className="shrink-0 text-xs uppercase tracking-widest opacity-75">{milestone.done ? "Done" : "Open"}</p>
-                                        </div>
+                                        <button
+                                            key={milestone.id}
+                                            type="button"
+                                            onClick={() => toggleSelectedSidequestMilestone(milestone.id)}
+                                            className="flex w-full items-start gap-3 rounded-xl border border-claret/20 p-3 text-left transition-colors hover:bg-claret hover:text-pink"
+                                        >
+                                            <span className={`mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full border ${milestone.done ? "border-claret bg-claret text-pink" : "border-current"}`}>
+                                                {milestone.done ? <Check className="size-4" /> : null}
+                                            </span>
+                                            <span className="min-w-0 flex-1">
+                                                <span className={`block ${milestone.done ? "line-through opacity-60" : ""}`}>{milestone.title}</span>
+                                                {milestone.cost !== undefined ? <span className="mt-1 block text-xs uppercase tracking-widest opacity-75">Cost {milestone.cost.toLocaleString()}</span> : null}
+                                            </span>
+                                        </button>
                                     ))}
                                 </div>
                             </div>
-                        ) : null}
+                        ) : (
+                            <div className="mt-4">
+                                <p className="text-sm uppercase tracking-widest opacity-75">Completion</p>
+                                <button
+                                    type="button"
+                                    onClick={toggleSelectedSidequestComplete}
+                                    className="mt-2 flex w-full items-start gap-3 rounded-xl border border-claret/20 p-3 text-left transition-colors hover:bg-claret hover:text-pink"
+                                >
+                                    <span className={`mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full border ${isCompletedSidequest(selectedSidequest) ? "border-claret bg-claret text-pink" : "border-current"}`}>
+                                        {isCompletedSidequest(selectedSidequest) ? <Check className="size-4" /> : null}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block font-bold">{isCompletedSidequest(selectedSidequest) ? "Completed" : "Mark as completed"}</span>
+                                        <span className="mt-1 block text-xs uppercase tracking-widest opacity-75">{isCompletedSidequest(selectedSidequest) ? "Tap to reopen this sidequest" : "No milestones on this one"}</span>
+                                    </span>
+                                </button>
+                            </div>
+                        )}
                     </article>
                 </div>
             ) : null}

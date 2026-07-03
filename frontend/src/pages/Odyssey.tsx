@@ -48,7 +48,7 @@ function isCompletedSidequest(sq: SidequestDto): boolean {
 function getSidequestStatus(sq: SidequestDto): 'Queued' | 'Ongoing' | 'Completed' {
   if (isCompletedSidequest(sq)) return 'Completed'
   const milestones = normalizeMilestones((sq as any).milestones)
-  if (milestones.length === 0) return 'Ongoing'
+  if (milestones.length === 0) return 'Queued'
   const doneCount = milestones.filter((m) => m.done).length
   return doneCount === 0 ? 'Queued' : 'Ongoing'
 }
@@ -91,7 +91,7 @@ export default function Odyssey() {
   const queuedSidequests = allSidequests.filter((sq) => {
     if (isCompletedSidequest(sq)) return false
     const milestones = normalizeMilestones((sq as any).milestones)
-    if (milestones.length === 0) return false
+    if (milestones.length === 0) return true
     const doneCount = milestones.filter((m) => m.done).length
     return doneCount === 0
   })
