@@ -3,14 +3,16 @@ import PaginationControls from "@/components/PaginationControls";
 import RecentExpenses from "@/components/RecentExpenses";
 import RecentMementos from "@/components/RecentMementos";
 import { useToast } from "@/components/Toast";
-import { Bell, Check, ChevronLeft, ChevronRight, Circle, X } from "lucide-react";
+import { Bell, Check, ChevronLeft, ChevronRight, Circle, Dumbbell, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
     createHabit,
     getRecentDashboardExpenses,
     getRecentDashboardMementos,
     getBudgets,
     getBloomPlans,
+    getActiveGritChallenge,
     getHabits,
     getRecipes,
     getSidequests,
@@ -20,6 +22,9 @@ import {
     type BudgetDto,
     type BloomPlanDto,
     type ExpenseDto,
+    type GritDailyLogDto,
+    type GritChallengeDto,
+    type GritTaskDto,
     type HabitDto,
     type HabitFrequency,
     type MementoDto,
@@ -126,6 +131,56 @@ function getMonthlyHabitTarget(habit: HabitDto, dateKey = todayKey()) {
 function getMonthlyHabitDone(habit: HabitDto, dateKey = todayKey()) {
     const currentMonth = monthKey(dateKey)
     return (habit.logs || []).filter((logDate) => monthKey(logDate) === currentMonth).length
+}
+
+function getGritChallengeEnd(challenge: GritChallengeDto) {
+    const date = parseDateKey(challenge.startDate)
+    date.setDate(date.getDate() + challenge.durationDays - 1)
+    return formatDateKey(date)
+}
+
+function getGritLogCheckIns(log: GritDailyLogDto) {
+    const checkIns = log.checkIns?.length ? log.checkIns : (log.completedTaskIds || []).map((taskId, index) => ({
+        id: `legacy-${log.date}-${taskId}-${index}`,
+        taskId,
+        createdAt: `${log.date}T00:00:00.000Z`,
+    }))
+    const seen = new Set<string>()
+    return checkIns.filter((checkIn) => {
+        if (seen.has(checkIn.taskId)) return false
+        seen.add(checkIn.taskId)
+        return true
+    })
+}
+
+function getGritDoneForTask(challenge: GritChallengeDto, task: GritTaskDto, dateKey = todayKey()) {
+    const logs = challenge.dailyLogs || []
+    if (!task.frequency || task.frequency === "daily") {
+        return getGritLogCheckIns(logs.find((log) => log.date === dateKey) || { date: dateKey, completedTaskIds: [] }).filter((checkIn) => checkIn.taskId === task.id).length
+    }
+    if (task.frequency === "weekly") {
+        return logs.filter((log) => getWeekKey(log.date) === getWeekKey(dateKey)).reduce((sum, log) => sum + getGritLogCheckIns(log).filter((checkIn) => checkIn.taskId === task.id).length, 0)
+    }
+    return logs.filter((log) => monthKey(log.date) === monthKey(dateKey)).reduce((sum, log) => sum + getGritLogCheckIns(log).filter((checkIn) => checkIn.taskId === task.id).length, 0)
+}
+
+function getGritTaskTarget(task: GritTaskDto) {
+    return !task.frequency || task.frequency === "daily" ? 1 : Math.max(1, task.target)
+}
+
+function getGritTaskProgress(challenge: GritChallengeDto, task: GritTaskDto, dateKey = todayKey()) {
+    const done = getGritDoneForTask(challenge, task, dateKey)
+    const target = getGritTaskTarget(task)
+    return {
+        done,
+        target,
+        percent: target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0,
+    }
+}
+
+function getGritFrequencyLabel(task: GritTaskDto) {
+    if (!task.frequency || task.frequency === "daily") return "Daily"
+    return `${task.target} Times ${task.frequency === "weekly" ? "Weekly" : "Monthly"}`
 }
 
 function getMetaTotal<T>(items: T[], fallback = items.length) {
@@ -284,6 +339,7 @@ export default function Dashboard() {
     const [weightEntries, setWeightEntries] = useState<WeightDto[]>([])
     const [sidequests, setSidequests] = useState<SidequestDto[]>([])
     const [bloomPlans, setBloomPlans] = useState<BloomPlanDto[]>([])
+    const [activeGritChallenge, setActiveGritChallenge] = useState<GritChallengeDto | null>(null)
     const [selectedBloomPlan, setSelectedBloomPlan] = useState<BloomPlanDto | null>(null)
     const [selectedSidequest, setSelectedSidequest] = useState<SidequestDto | null>(null)
     const [overviewSlide, setOverviewSlide] = useState(1)
@@ -334,12 +390,14 @@ export default function Dashboard() {
                 getWeights(12, 1).catch(() => [] as WeightDto[]),
                 getSidequests(1000, 1).catch(() => [] as SidequestDto[]),
                 getBloomPlans(todayKey(), formatDateKey(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000))).catch(() => [] as BloomPlanDto[]),
-            ]).then(([recipes, weights, sidequestItems, bloomItems]) => {
+                getActiveGritChallenge().catch(() => null),
+            ]).then(([recipes, weights, sidequestItems, bloomItems, gritChallenge]) => {
                 if (!mounted) return
                 setRecipesTotal(getMetaTotal(recipes, recipes.length))
                 setWeightEntries(weights)
                 setSidequests(sidequestItems)
                 setBloomPlans(bloomItems)
+                setActiveGritChallenge(gritChallenge)
             }).catch(() => {})
         }
 
@@ -353,7 +411,8 @@ export default function Dashboard() {
             window.addEventListener('heph:expense:created', handler as EventListener)
             window.addEventListener('heph:data:changed', dataHandler as EventListener)
             window.addEventListener('heph:bloom:changed', handler as EventListener)
-                return () => { mounted = false; window.removeEventListener('heph:expense:created', handler as EventListener); window.removeEventListener('heph:data:changed', dataHandler as EventListener); window.removeEventListener('heph:bloom:changed', handler as EventListener) }
+            window.addEventListener('heph:grit:changed', handler as EventListener)
+                return () => { mounted = false; window.removeEventListener('heph:expense:created', handler as EventListener); window.removeEventListener('heph:data:changed', dataHandler as EventListener); window.removeEventListener('heph:bloom:changed', handler as EventListener); window.removeEventListener('heph:grit:changed', handler as EventListener) }
     }, [])
 
     async function toggleHabitForToday(habitId: string) {
@@ -455,6 +514,13 @@ export default function Dashboard() {
         const queuedSidequests = sidequests.filter((sidequest) => getSidequestStatus(sidequest) === "Queued")
         const completedSidequests = sidequests.filter(isCompletedSidequest)
         const upcomingBloomPlans = [...bloomPlans].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5)
+        const activeGritTasks = activeGritChallenge?.tasks || []
+        const todayGritProgress = activeGritChallenge
+            ? activeGritTasks.map((task) => ({ task, progress: getGritTaskProgress(activeGritChallenge, task) }))
+            : []
+        const todayGritDone = todayGritProgress.reduce((sum, item) => sum + item.progress.done, 0)
+        const todayGritTarget = todayGritProgress.reduce((sum, item) => sum + item.progress.target, 0)
+        const todayGritPercent = todayGritTarget > 0 ? Math.min(100, Math.round((todayGritDone / todayGritTarget) * 100)) : 0
         const sortedWeights = [...weightEntries].sort((a, b) => new Date(a.entryDate).getTime() - new Date(b.entryDate).getTime())
         const firstWeight = sortedWeights[0]?.weightKg ?? 0
         const latestWeight = sortedWeights[sortedWeights.length - 1]?.weightKg ?? firstWeight
@@ -469,10 +535,15 @@ export default function Dashboard() {
             queuedSidequests,
             completedSidequests,
             upcomingBloomPlans,
+            activeGritTasks,
+            todayGritProgress,
+            todayGritDone,
+            todayGritTarget,
+            todayGritPercent,
             sortedWeights,
             weightDelta,
         }
-    }, [bloomPlans, habits, sidequests, weightEntries])
+    }, [activeGritChallenge, bloomPlans, habits, sidequests, weightEntries])
 
     const weightChartPoints = useMemo(() => {
         const values = overviewStats.sortedWeights.map((entry) => entry.weightKg)
@@ -558,6 +629,50 @@ export default function Dashboard() {
                         )}
                     </div>
                 </>
+            ),
+        },
+        {
+            title: "Grit",
+            to: "/grit",
+            content: (
+                activeGritChallenge ? (
+                    <>
+                        <div className="flex items-center gap-2">
+                            <Dumbbell className="size-5" />
+                            <p className="text-sm uppercase tracking-widest opacity-75">Active Challenge</p>
+                        </div>
+                        <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                            <div>
+                                <p className="text-3xl font-bold leading-tight">{activeGritChallenge.title}</p>
+                                <p className="mt-1 text-sm uppercase tracking-widest opacity-75">
+                                    {parseDateKey(activeGritChallenge.startDate).toLocaleDateString("en-NG", { month: "short", day: "numeric" })} - {parseDateKey(getGritChallengeEnd(activeGritChallenge)).toLocaleDateString("en-NG", { month: "short", day: "numeric" })}
+                                </p>
+                            </div>
+                            <Link to="/grit" className="rounded-xl border border-claret px-3 py-2 text-center text-sm uppercase tracking-widest hover:bg-claret hover:text-pink">
+                                Open Grit
+                            </Link>
+                        </div>
+                        <div className="mt-5 h-4 overflow-hidden rounded-full bg-claret/20">
+                            <div className="h-full rounded-full bg-claret" style={{ width: `${overviewStats.todayGritPercent}%` }} />
+                        </div>
+                        <p className="mt-3 text-sm uppercase tracking-widest opacity-75">{overviewStats.todayGritDone} / {overviewStats.todayGritTarget} checks due now</p>
+                        <div className="mt-5 grid gap-2 md:grid-cols-3">
+                            {overviewStats.todayGritProgress.slice(0, 6).map(({ task, progress }) => (
+                                <div key={task.id} className="rounded-xl border border-claret/20 px-3 py-2">
+                                    <p className="font-bold leading-tight">{task.title}</p>
+                                    <p className="mt-1 text-xs uppercase tracking-widest opacity-75">{getGritFrequencyLabel(task)} - {progress.done}/{progress.target}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </>
+                ) : (
+                    <div className="rounded-xl border border-dashed border-claret/30 p-4">
+                        <p className="text-xl">No active Grit challenge yet.</p>
+                        <Link to="/grit" className="mt-3 inline-flex rounded-xl border border-claret px-3 py-2 text-sm uppercase tracking-widest hover:bg-claret hover:text-pink">
+                            Create Challenge
+                        </Link>
+                    </div>
+                )
             ),
         },
         {

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { Bell, Brain, Heart, ListChecks, LogOut, Menu, PiggyBank, ScrollText, Sprout, Utensils, Map, X } from "lucide-react";
+import { Bell, Brain, Dumbbell, Heart, ListChecks, LogOut, Menu, PiggyBank, ScrollText, Sprout, Utensils, Map, X } from "lucide-react";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { getAccessToken, getBloomPlans, type BloomPlanDto } from "@/lib/api";
+import { getAccessToken, getActiveGritChallenge, getBloomPlans, type BloomPlanDto, type GritChallengeDto, type HabitFrequency } from "@/lib/api";
 import { logout } from "@/lib/auth";
 import { useEffect, useMemo, useState } from "react";
 
@@ -20,7 +20,10 @@ function parseDateKey(dateKey: string) {
 export default function Layout({children}: LayoutProps) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [bloomPlans, setBloomPlans] = useState<BloomPlanDto[]>([]);
+    const [activeGritChallenge, setActiveGritChallenge] = useState<GritChallengeDto | null>(null);
     const [showBloomReminders, setShowBloomReminders] = useState(false);
+    const [showGritReminder, setShowGritReminder] = useState(false);
+    const [gritReminderFilter, setGritReminderFilter] = useState<HabitFrequency>("daily");
     const { pathname } = useLocation();
     const pageTitleByPath: Record<string, string> = {
         "/dashboard": "DASHBOARD",
@@ -29,6 +32,7 @@ export default function Layout({children}: LayoutProps) {
         "/mementos": "MEMENTO",
         "/ounje": "OUNJE",
         "/bloom": "BLOOM",
+        "/grit": "GRIT",
         "/odyssey": "ODYSSEY",
         "/the-one": "THE ONE",
     };
@@ -46,6 +50,7 @@ export default function Layout({children}: LayoutProps) {
             <NavLink to="/mementos" className={navItemClass}><ScrollText className="size-4" />MEMENTO</NavLink>
             <NavLink to="/ounje" className={navItemClass}><Utensils className="size-4" />OUNJE</NavLink>
             <NavLink to="/bloom" className={navItemClass}><Sprout className="size-4" />BLOOM</NavLink>
+            <NavLink to="/grit" className={navItemClass}><Dumbbell className="size-4" />GRIT</NavLink>
             <NavLink to="/odyssey" className={navItemClass}><Map className="size-4" />ODYSSEY</NavLink>
             <NavLink to="/the-one" className={navItemClass}><ListChecks className="size-4" />THE ONE</NavLink>
         </>
@@ -58,6 +63,7 @@ export default function Layout({children}: LayoutProps) {
             <NavLink to="/mementos" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><ScrollText className="size-4" />MEMENTO</NavLink>
             <NavLink to="/ounje" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><Utensils className="size-4" />OUNJE</NavLink>
             <NavLink to="/bloom" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><Sprout className="size-4" />BLOOM</NavLink>
+            <NavLink to="/grit" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><Dumbbell className="size-4" />GRIT</NavLink>
             <NavLink to="/odyssey" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><Map className="size-4" />ODYSSEY</NavLink>
             <NavLink to="/the-one" onClick={() => setIsMobileMenuOpen(false)} className={mobileNavItemClass}><ListChecks className="size-4" />THE ONE</NavLink>
         </>
@@ -72,6 +78,9 @@ export default function Layout({children}: LayoutProps) {
             })
             .sort((a, b) => a.date.localeCompare(b.date));
     }, [bloomPlans]);
+    const filteredGritTasks = useMemo(() => {
+        return (activeGritChallenge?.tasks || []).filter((task) => (task.frequency || "daily") === gritReminderFilter);
+    }, [activeGritChallenge, gritReminderFilter]);
 
     useEffect(() => {
         let mounted = true;
@@ -97,12 +106,40 @@ export default function Layout({children}: LayoutProps) {
     }, []);
 
     useEffect(() => {
+        let mounted = true;
+        const refreshGritChallenge = () => {
+            if (!getAccessToken()) return;
+            getActiveGritChallenge()
+                .then((challenge) => {
+                    if (mounted) setActiveGritChallenge(challenge);
+                })
+                .catch(() => {
+                    if (mounted) setActiveGritChallenge(null);
+                });
+        };
+        refreshGritChallenge();
+        window.addEventListener("heph:grit:changed", refreshGritChallenge);
+        return () => {
+            mounted = false;
+            window.removeEventListener("heph:grit:changed", refreshGritChallenge);
+        };
+    }, []);
+
+    useEffect(() => {
         if (!upcomingBloomPlans.length) return;
         const reminderKey = `heph_bloom_reminders_seen_${todayKey()}`;
         if (sessionStorage.getItem(reminderKey)) return;
         setShowBloomReminders(true);
         sessionStorage.setItem(reminderKey, "true");
     }, [upcomingBloomPlans]);
+
+    useEffect(() => {
+        if (!activeGritChallenge) return;
+        const reminderKey = `heph_grit_reminder_seen_${todayKey()}_${activeGritChallenge._id}`;
+        if (sessionStorage.getItem(reminderKey)) return;
+        setShowGritReminder(true);
+        sessionStorage.setItem(reminderKey, "true");
+    }, [activeGritChallenge]);
 
     return (
         <div className="min-h-screen bg-claret text-pink font-pompiere tracking-widest flex flex-col">
@@ -206,6 +243,77 @@ export default function Layout({children}: LayoutProps) {
                                 className="rounded-2xl border border-claret bg-claret px-4 py-3 text-sm uppercase tracking-widest text-pink hover:bg-claret/90"
                             >
                                 Open Bloom
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
+            {showGritReminder && activeGritChallenge ? (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-claret/60 p-4"
+                    onClick={() => setShowGritReminder(false)}
+                >
+                    <div
+                        className="w-full max-w-lg rounded-2xl border border-claret/20 bg-pink p-6 text-claret shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-2">
+                                <Dumbbell className="size-5" />
+                                <h2 className="text-2xl font-bold uppercase">Grit Check-In</h2>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowGritReminder(false)}
+                                aria-label="Close Grit reminder"
+                                title="Close Grit reminder"
+                                className="inline-flex size-8 items-center justify-center rounded-md hover:bg-claret hover:text-pink"
+                            >
+                                <X className="size-5" />
+                            </button>
+                        </div>
+                        <div className="mt-4 rounded-xl border border-claret/30 p-4">
+                            <p className="text-sm uppercase tracking-widest opacity-75">Active challenge</p>
+                            <p className="text-3xl font-bold leading-tight">{activeGritChallenge.title}</p>
+                            <p className="mt-2 text-sm uppercase tracking-widest opacity-75">
+                                {activeGritChallenge.durationDays} days - {(activeGritChallenge.tasks || []).length} tasks
+                            </p>
+                        </div>
+                        <div className="mt-4 inline-flex w-full overflow-hidden rounded-xl border border-claret/40">
+                            {(["daily", "weekly", "monthly"] as HabitFrequency[]).map((filter) => (
+                                <button
+                                    key={filter}
+                                    type="button"
+                                    onClick={() => setGritReminderFilter(filter)}
+                                    className={`flex-1 px-3 py-2 text-sm uppercase tracking-widest ${gritReminderFilter === filter ? "bg-claret text-pink" : "hover:bg-claret hover:text-pink"} ${filter !== "daily" ? "border-l border-claret/40" : ""}`}
+                                >
+                                    {filter}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="mt-4 max-h-56 space-y-2 overflow-y-auto pr-1">
+                            {filteredGritTasks.length ? filteredGritTasks.map((task) => {
+                                const goal = (activeGritChallenge.goals || []).find((item) => item.id === task.goalId);
+                                return (
+                                    <div key={task.id} className="rounded-xl border border-claret/30 p-3">
+                                        <p className="text-lg font-bold leading-tight">{task.title}</p>
+                                        <p className="mt-1 text-xs uppercase tracking-widest opacity-75">
+                                            {goal?.title || "No goal"} - {!task.frequency || task.frequency === "daily" ? "Daily" : `${task.target}x ${task.frequency}`}
+                                        </p>
+                                    </div>
+                                );
+                            }) : (
+                                <p className="rounded-xl border border-dashed border-claret/30 p-3 text-sm uppercase tracking-widest opacity-75">No {gritReminderFilter} tasks</p>
+                            )}
+                        </div>
+                        <div className="mt-5 flex justify-end">
+                            <Link
+                                to="/grit"
+                                onClick={() => setShowGritReminder(false)}
+                                className="rounded-2xl border border-claret bg-claret px-4 py-3 text-sm uppercase tracking-widest text-pink hover:bg-claret/90"
+                            >
+                                Open Grit
                             </Link>
                         </div>
                     </div>

@@ -18,6 +18,7 @@ import theOneRouter from './modules/the-one/theOne.route'
 import foodPlansRouter from './modules/food-plans/foodPlans.route'
 import bloomRouter from './modules/bloom/bloom.route'
 import incomeRouter from './modules/income/income.route'
+import gritRouter from './modules/grit/grit.route'
 
 dotenv.config()
 
@@ -60,6 +61,7 @@ app.use('/api/v1/the-one', theOneRouter)
 app.use('/api/v1/food-plans', foodPlansRouter)
 app.use('/api/v1/bloom', bloomRouter)
 app.use('/api/v1/income', incomeRouter)
+app.use('/api/v1/grit', gritRouter)
 
 app.get('/', (_req, res) => {
   res.send({ success: true, data: { message: 'Heph backend running' } })

@@ -192,6 +192,54 @@ export type BloomDeepDiveDto = {
   updatedAt?: string
 }
 
+export type GritTaskDto = {
+  id: string
+  goalId?: string
+  title: string
+  frequency: HabitFrequency
+  target: number
+}
+
+export type GritGoalDto = {
+  id: string
+  title: string
+  notes?: string
+}
+
+export type GritCheckInDto = {
+  id: string
+  taskId: string
+  createdAt: string
+}
+
+export type GritNoteDto = {
+  id: string
+  text: string
+  createdAt: string
+}
+
+export type GritDailyLogDto = {
+  date: string
+  completedTaskIds: string[]
+  checkIns?: GritCheckInDto[]
+  notes?: GritNoteDto[] | string
+}
+
+export type GritChallengeStatus = 'active' | 'completed' | 'archived'
+
+export type GritChallengeDto = {
+  _id: string
+  title: string
+  startDate: string
+  durationDays: number
+  goals: GritGoalDto[]
+  tasks: GritTaskDto[]
+  dailyLogs: GritDailyLogDto[]
+  status: GritChallengeStatus
+  createdAt?: string
+  updatedAt?: string
+}
+
 const PROD_API_BASE = 'https://heph-backend.onrender.com/api/v1'
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
 
@@ -620,6 +668,41 @@ export async function createBloomDeepDiveLog(deepDiveId: string, payload: { date
 
 export async function deleteBloomDeepDiveLog(deepDiveId: string, logId: string) {
   return request<BloomDeepDiveDto>(`/bloom/deep-dives/${deepDiveId}/logs/${logId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getGritChallenges() {
+  return request<GritChallengeDto[]>('/grit')
+}
+
+export async function getActiveGritChallenge() {
+  return request<GritChallengeDto | null>('/grit/active')
+}
+
+export async function createGritChallenge(payload: { title: string; startDate: string; durationDays: number; goals: Array<{ id?: string; title: string; notes?: string }>; tasks: Array<{ title: string; goalId?: string; frequency: HabitFrequency; target: number }> }) {
+  return request<GritChallengeDto>('/grit', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateGritChallenge(id: string, payload: Partial<{ title: string; startDate: string; durationDays: number; goals: GritGoalDto[]; tasks: GritTaskDto[]; status: GritChallengeStatus }>) {
+  return request<GritChallengeDto>(`/grit/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateGritDay(challengeId: string, date: string, payload: { completedTaskIds?: string[]; checkIns?: GritCheckInDto[]; notes?: GritNoteDto[] | string }) {
+  return request<GritChallengeDto>(`/grit/${challengeId}/days/${date}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteGritChallenge(id: string) {
+  return request<{ id: string }>(`/grit/${id}`, {
     method: 'DELETE',
   })
 }
